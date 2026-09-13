@@ -1,6 +1,6 @@
 {
-  "name": "Writing Chat",
-  "short_name": "Writing Chat",
+  "name": "Tchat v8.12.2",
+  "short_name": "Tcat v8.12.2",
   "description": "Real-time room chat with video calls, file sharing, and a collaborative whiteboard.",
   "start_url": "./",
   "scope": "./",
