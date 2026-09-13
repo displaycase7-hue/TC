@@ -1,4 +1,4 @@
-const CACHE_NAME = "writing-chat-shell-v1";
+const CACHE_NAME = "Tchat-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
