@@ -5512,7 +5512,7 @@ chat.on("message",async({message})=>{
     const peer=groupPeers.get(message.fromId); if(peer) try{await peer.pc.addIceCandidate(new RTCIceCandidate(message.candidate));}catch{} return;
   }
   if(message.type==="groupLeave"){removeGroupPeer(message.fromId);return;}
-};
+});
 window.addEventListener("beforeunload",()=>{if(groupActive)closeGroupCall(false);});
 
 </script>
