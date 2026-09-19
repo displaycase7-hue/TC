@@ -720,6 +720,7 @@ body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-s
 header{background:var(--surface);color:var(--text);padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:100;box-shadow:0 2px 14px rgba(0,0,0,.05)}
 header h1{font-size:18px;display:flex;align-items:center;gap:8px}
 header h1:after{content:"TChat";font-weight:800;letter-spacing:-.3px}
+@media(min-width:701px){header h1{justify-content:center;width:100%}}
 #room{background:var(--surface);color:var(--muted);padding:5px 12px;font-size:12px;border-bottom:1px solid var(--line)}
 #share{background:var(--surface);display:flex;justify-content:center;align-items:center;gap:7px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 #share button{background:var(--surface2);color:var(--text);border:1px solid var(--line);padding:8px 11px;border-radius:999px;font-size:12px}
@@ -2434,10 +2435,11 @@ function addMessage(
     reactionBar.className = "reactionBar";
     ["👍","❤️","😂","🎉","😮"].forEach(emoji => {
         const b = document.createElement("button");
+        b.type = "button";
         b.className = "reactBtn";
         b.dataset.emoji = emoji;
         b.textContent = emoji + " 0";
-        b.onclick = () => toggleReaction(box.dataset.messageId, emoji, b);
+        b.onclick = () => window.toggleReaction(box.dataset.messageId, emoji);
         reactionBar.appendChild(b);
     });
     actions.appendChild(reactionBar);
@@ -2503,10 +2505,12 @@ function sendTextMessage(text) {
             .toString()
             .padStart(2, "0");
 
+    const messageId = "msg-" + crypto.randomUUID();
+
     chat.send({
 
         type: "writing",
-        messageId: "msg-" + crypto.randomUUID(),
+        messageId: messageId,
 
         name: name,
 
@@ -2519,7 +2523,8 @@ function sendTextMessage(text) {
     addMessage(
         name,
         text,
-        time
+        time,
+        messageId
     );
 
 }
@@ -5458,23 +5463,63 @@ window.addEventListener(
   }
   function escapeHtml(x){return String(x).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));}
 
-  window.toggleReaction=function(messageId,emoji,button){
-    chat.send({type:"reaction",messageId,emoji,fromId:myId});
-    button.classList.add("active");
-  };
-  function applyReaction(messageId,emoji){
+  const reactionEmojis = ["👍","❤️","😂","🎉","😮"];
+  const reactionState = new Map();
+
+  function ensureReactionState(messageId){
+    if(!reactionState.has(messageId)){
+      const state={};
+      reactionEmojis.forEach(emoji=>{ state[emoji]=new Set(); });
+      reactionState.set(messageId,state);
+    }
+    return reactionState.get(messageId);
+  }
+
+  function updateReactionButton(box,emoji){
+    const b=box?.querySelector('.reactBtn[data-emoji="'+emoji+'"]');
+    if(!b)return;
+    const state=ensureReactionState(box.dataset.messageId);
+    const count=state[emoji]?.size || 0;
+    b.textContent=emoji+" "+count;
+    b.classList.toggle("active",!!state[emoji]?.has(myId));
+  }
+
+  window.toggleReaction=function(messageId,emoji){
     const box=document.querySelector('[data-message-id="'+messageId+'"]');
     if(!box)return;
-    const b=box.querySelector('.reactBtn[data-emoji="'+emoji+'"]');
-    if(!b)return;
-    const n=Number((b.textContent.match(/\d+$/)||["0"])[0])+1;
-    b.textContent=emoji+" "+n;
+    const state=ensureReactionState(messageId);
+    const mine=state[emoji]?.has(myId);
+    if(mine) state[emoji].delete(myId);
+    else state[emoji].add(myId);
+    updateReactionButton(box,emoji);
+    chat.send({
+      type:"reaction",
+      messageId,
+      emoji,
+      fromId:myId,
+      action:mine ? "remove" : "add"
+    });
+  };
+
+  function applyReaction(messageId,emoji,fromId,action="add"){
+    if(!messageId || !reactionEmojis.includes(emoji))return;
+    const state=ensureReactionState(messageId);
+    const userId=fromId || "anonymous";
+    if(action==="remove") state[emoji].delete(userId);
+    else state[emoji].add(userId);
+
+    const box=document.querySelector('[data-message-id="'+messageId+'"]');
+    if(!box)return;
+    updateReactionButton(box,emoji);
   }
 
   // Wire message reception for the new features without disturbing existing handlers.
   chat.on("message",({message})=>{
     if(!message)return;
-    if(message.type==="reaction"){ applyReaction(message.messageId,message.emoji); return; }
+    if(message.type==="reaction"){
+      applyReaction(message.messageId,message.emoji,message.fromId,message.action || "add");
+      return;
+    }
     if(message.type==="poll"){ renderPoll(message.poll,true); return; }
     if(message.type==="pollVote"){
       const box=document.querySelector('[data-poll-id="'+message.pollId+'"]');
