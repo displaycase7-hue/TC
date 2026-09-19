@@ -417,6 +417,24 @@ button.screenButton {
     color: #222;
 }
 
+/* When opened from a video call, keep the call visible around the board. */
+#whiteboard.callOverlay {
+    inset: 4vh 4vw;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 18px 60px rgba(0,0,0,.45);
+    z-index: 50000;
+}
+#whiteboard.callOverlay #whiteboardCanvas {
+    height: calc(100% - 58px);
+}
+@media(max-width:700px){
+    #whiteboard.callOverlay {
+        inset: 1vh 1vw;
+        border-radius: 12px;
+    }
+}
+
 #whiteboardHeader {
     height: 58px;
     background: #252525;
@@ -1084,6 +1102,12 @@ body.dark #toolsMenu button{color:var(--text)}
         </button>
 
         <button
+            id="videoWhiteboard"
+            class="videoGray">
+            🧑‍🏫 Whiteboard
+        </button>
+
+        <button
             id="videoHangup"
             class="videoRed">
             ☎ Hang Up
@@ -1212,6 +1236,7 @@ body.dark #toolsMenu button{color:var(--text)}
     <button id="groupCamera">📷 Camera</button>
     <button id="groupSwitchCamera">🔄 Switch Camera</button>
     <button id="groupScreen">🖥️ Share screen</button>
+    <button id="groupWhiteboard">🧑‍🏫 Whiteboard</button>
     <button id="groupHangup">☎ Leave call</button>
   </div>
 </div>
@@ -4085,20 +4110,41 @@ function drawRemoteLine(data) {
 
 }
 
+function openWhiteboardDuringCall() {
+
+    whiteboard.classList.add("callOverlay");
+    whiteboard.style.display = "block";
+
+    setTimeout(
+        resizeWhiteboard,
+        20
+    );
+
+}
+
+function openWhiteboardNormally() {
+
+    whiteboard.classList.remove("callOverlay");
+    whiteboard.style.display = "block";
+
+    setTimeout(
+        resizeWhiteboard,
+        20
+    );
+
+}
+
 document.getElementById(
     "openWhiteboard"
-).onclick =
-    () => {
+).onclick = openWhiteboardNormally;
 
-        whiteboard.style.display =
-            "block";
+document.getElementById(
+    "videoWhiteboard"
+).onclick = openWhiteboardDuringCall;
 
-        setTimeout(
-            resizeWhiteboard,
-            20
-        );
-
-    };
+document.getElementById(
+    "groupWhiteboard"
+).onclick = openWhiteboardDuringCall;
 
 document.getElementById(
     "closeBoard"
@@ -4107,6 +4153,8 @@ document.getElementById(
 
         whiteboard.style.display =
             "none";
+
+        whiteboard.classList.remove("callOverlay");
 
     };
 
