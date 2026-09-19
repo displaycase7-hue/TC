@@ -138,9 +138,6 @@ textarea {
     width: 130px;
 }
 
-#videoTarget {
-    width: 150px;
-}
 
 #text {
     flex: 1;
@@ -228,181 +225,7 @@ button:disabled {
     margin-right: 5px;
 }
 
-/* =========================
-   VIDEO REQUEST
-========================= */
 
-#videoRequest {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,.7);
-    z-index: 20000;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-
-#videoRequestBox {
-    width: 100%;
-    max-width: 400px;
-    background: white;
-    border-radius: 16px;
-    padding: 25px;
-    text-align: center;
-    box-shadow: 0 15px 50px rgba(0,0,0,.4);
-}
-
-#videoRequestBox h2 {
-    margin-top: 0;
-}
-
-#videoRequestButtons {
-    display: flex;
-    gap: 10px;
-    margin-top: 20px;
-}
-
-#videoRequestButtons button {
-    flex: 1;
-}
-
-#declineVideo {
-    background: #777;
-}
-
-/* =========================
-   VIDEO CALL
-========================= */
-
-#videoCall {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: #111;
-    z-index: 25000;
-    color: white;
-}
-
-#videoHeader {
-    height: 60px;
-    background: #252525;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 18px;
-}
-
-#videoHeader h2 {
-    margin: 0;
-    font-size: 18px;
-}
-
-#videoStatus {
-    color: #aaa;
-    font-size: 13px;
-}
-
-#videos {
-    position: relative;
-    width: 100%;
-    height: calc(100vh - 120px);
-    background: #111;
-    overflow: hidden;
-}
-
-#remoteVideo {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    background: #000;
-}
-
-#localVideo {
-    position: absolute;
-    right: 18px;
-    bottom: 18px;
-    width: 240px;
-    height: 160px;
-    border: 3px solid white;
-    border-radius: 10px;
-    object-fit: cover;
-    background: #000;
-    z-index: 5;
-    box-shadow: 0 5px 25px #000;
-}
-
-#screenVideo {
-    display: none;
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    background: #050505;
-    z-index: 4;
-}
-
-#videoWaiting {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    background: #111;
-    z-index: 2;
-}
-
-#videoWaiting h2 {
-    margin: 0 0 8px;
-}
-
-#videoWaiting p {
-    color: #999;
-}
-
-#videoControls {
-    height: 60px;
-    background: #252525;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-
-button.videoGray {
-    background: #555;
-}
-
-button.videoRed {
-    background: #d93025;
-}
-
-button.screenButton {
-    background: #16845b;
-}
-
-
-/* =========================
-   VIDEO CALL CHAT SIDEBAR
-========================= */
-#videoMain { display:flex; width:100%; height:calc(100vh - 120px); min-height:0; }
-#videoMain #videos { flex:1; width:auto; height:100%; min-width:0; }
-#videoChatSidebar { width:320px; flex:0 0 320px; display:flex; flex-direction:column; background:#1b1b1b; border-left:1px solid #333; }
-#videoChatHeader { padding:14px 16px; background:#252525; border-bottom:1px solid #333; font-weight:700; }
-#videoChatMessages { flex:1; overflow-y:auto; padding:12px; }
-.videoChatMessage { margin:0 0 10px; padding:8px 10px; border-radius:10px; background:#2a2a2a; overflow-wrap:anywhere; }
-.videoChatMessage.mine { background:#245b82; }
-.videoChatMessageName { font-size:11px; color:#aaa; margin-bottom:3px; }
-.videoChatMessage.mine .videoChatMessageName { color:#d7ecff; }
-.videoChatMessageText { white-space:pre-wrap; line-height:1.35; }
-#videoChatForm { display:flex; gap:7px; padding:10px; background:#252525; border-top:1px solid #333; }
-#videoChatInput { flex:1; min-width:0; resize:none; color:white; background:#111; border:1px solid #444; border-radius:8px; padding:9px; }
-#videoChatSend { flex:0 0 auto; }
-@media(max-width:900px) { #videoChatSidebar { width:280px; flex-basis:280px; } }
-@media(max-width:700px) { #videoChatSidebar { width:220px; flex-basis:220px; } #videoChatHeader { padding:10px; } #videoChatMessages { padding:8px; } }
 
 /* =========================
    WHITEBOARD
@@ -587,7 +410,6 @@ button.screenButton {
     }
 
     #name,
-    #videoTarget,
     #text {
         width: 100%;
     }
@@ -596,18 +418,7 @@ button.screenButton {
         width: 100%;
     }
 
-    #localVideo {
-        width: 140px;
-        height: 100px;
-        right: 10px;
-        bottom: 10px;
-    }
 
-    #videoControls {
-        height: auto;
-        min-height: 60px;
-        padding: 8px;
-    }
 
     #whiteboardHeader {
         overflow-x: auto;
@@ -766,8 +577,6 @@ button:hover{background:var(--accent2)}
 .userPill{background:var(--surface);border:1px solid var(--line)}
 #fileShare{max-width:850px;padding:0 14px}
 #fileShareBox{background:var(--surface);border:1px solid var(--line);box-shadow:none}
-/* hide the old one-to-one target from the main composer; the feature remains available to receive calls */
-#videoTarget,#videoRequestButton{display:none!important}
 #form:after{content:""}
 #share .primaryTool{display:inline-flex}
 #moreTools{position:relative}
@@ -849,10 +658,8 @@ body.dark #toolsMenu button{color:var(--text)}
 }
 
 
-.mobileOnlyCameraSwitch{display:none}
 @media(max-width:700px){
-  .mobileOnlyCameraSwitch{display:inline-flex}
-  #videoControls button,#groupCallControls button{min-height:44px;padding:9px 12px}
+  #groupCallControls button{min-height:44px;padding:9px 12px}
 }
 
 
@@ -890,7 +697,6 @@ body.dark #toolsMenu button{color:var(--text)}
         <button id="moreToolsButton">••• More</button>
         <div id="toolsMenu">
             <button id="openWhiteboard">🧑‍🏫 Whiteboard</button>
-            <button id="privateCallButton">📞 Private video call</button>
             <button id="groupCallButton">👥 Group video call</button>
             <button id="createPollButton">📊 Create poll</button>
             <button id="sharedTimerButton">⏱️ Shared timer</button>
@@ -903,7 +709,6 @@ body.dark #toolsMenu button{color:var(--text)}
 <div id="featureDock">
     <button class="dockBtn" id="quickPoll">📊 Poll</button>
     <button class="dockBtn" id="quickTimer">⏱️ Timer</button>
-    <button class="dockBtn" id="quickPrivateCall">📞 Private call</button>
     <button class="dockBtn" id="quickGroupCall">👥 Group call</button>
 </div>
 
@@ -972,15 +777,6 @@ body.dark #toolsMenu button{color:var(--text)}
             maxlength="30"
             autocomplete="name">
 
-        <input
-            id="videoTarget"
-            placeholder="Video call name"
-            maxlength="30">
-
-        <button id="videoRequestButton">
-            📹 Video Request
-        </button>
-
         <textarea
             id="text"
             rows="2"
@@ -993,149 +789,6 @@ body.dark #toolsMenu button{color:var(--text)}
 
         <button id="sendButton">
             Send
-        </button>
-
-    </div>
-
-</div>
-
-<!-- =========================
-     VIDEO REQUEST
-========================= -->
-
-<div id="videoRequest">
-
-    <div id="videoRequestBox">
-
-        <h2>📞 Incoming Video Call</h2>
-
-        <p id="videoRequestText">
-            Someone wants to video call you.
-        </p>
-
-        <div id="videoRequestButtons">
-
-            <button id="acceptVideo">
-                ✅ Accept
-            </button>
-
-            <button id="declineVideo">
-                ❌ Decline
-            </button>
-
-        </div>
-
-    </div>
-
-</div>
-
-<!-- =========================
-     VIDEO CALL
-========================= -->
-
-<div id="videoCall">
-
-    <div id="videoHeader">
-
-        <h2>
-            📹 Private Video Call
-        </h2>
-
-        <div id="videoStatus">
-            Connecting...
-        </div>
-
-    </div>
-
-    <div id="videoMain">
-
-        <div id="videos">
-
-        <video
-            id="remoteVideo"
-            autoplay
-            playsinline>
-        </video>
-
-        <video
-            id="screenVideo"
-            autoplay
-            playsinline>
-        </video>
-
-        <video
-            id="localVideo"
-            autoplay
-            muted
-            playsinline>
-        </video>
-
-        <div id="videoWaiting">
-
-            <h2>📹 Video Call</h2>
-
-            <p id="videoWaitingText">
-                Connecting...
-            </p>
-
-        </div>
-
-        </div>
-
-        <aside id="videoChatSidebar">
-            <div id="videoChatHeader">💬 Call Chat</div>
-            <div id="videoChatMessages" aria-live="polite"></div>
-            <div id="videoChatForm">
-                <textarea id="videoChatInput" rows="2" maxlength="2000" placeholder="Message..."></textarea>
-                <button id="videoChatSend">Send</button>
-            </div>
-        </aside>
-
-    </div>
-
-    <div id="videoControls">
-
-        <button
-            id="videoMute"
-            class="videoGray">
-            🎤 Mute
-        </button>
-
-        <button
-            id="videoCamera"
-            class="videoGray">
-            📷 Camera Off
-        </button>
-
-        <button
-            id="videoSwitchCamera"
-            class="videoGray mobileOnlyCameraSwitch"
-            type="button">
-            🔄 Switch Camera
-        </button>
-
-        <button
-            id="shareScreen"
-            class="screenButton">
-            🖥️ Share Screen
-        </button>
-
-        <button
-            id="videoWhiteboard"
-            class="videoGray">
-            🧑‍🏫 Whiteboard
-        </button>
-
-        <button
-            id="videoChatToggle"
-            class="videoGray">
-            💬 Hide Chat
-        </button>
-
-        <button
-            id="videoHangup"
-            class="videoRed">
-            ☎ Hang Up
         </button>
 
     </div>
@@ -1241,16 +894,6 @@ body.dark #toolsMenu button{color:var(--text)}
     <input id="timerMinutes" type="number" min="0" max="120" step="1" value="5" placeholder="Minutes">
     <input id="timerSeconds" type="number" min="0" max="59" step="1" value="0" placeholder="Seconds">
     <div class="modalRow"><button class="secondary" id="closeTimer">Cancel</button><button id="startTimer">Start for everyone</button></div>
-  </div>
-</div>
-
-<div id="privateCallModal" class="modalOverlay">
-  <div class="modalCard">
-    <h2>📞 Private video call</h2>
-    <p style="margin:0 0 10px;color:var(--muted)">Choose someone currently in this room.</p>
-    <input id="privateCallTarget" list="privateCallUsers" maxlength="30" placeholder="Enter their name">
-    <datalist id="privateCallUsers"></datalist>
-    <div class="modalRow"><button class="secondary" id="closePrivateCall">Cancel</button><button id="startPrivateCall">Call</button></div>
   </div>
 </div>
 
@@ -1417,6 +1060,17 @@ let connect = (e, s = {}) => {
 };
 
 
+const rtcConfig = {
+    iceServers: [
+        { urls: [
+            "stun:stun.l.google.com:19302",
+            "stun:stun1.l.google.com:19302"
+        ] },
+        { urls: "stun:stun.cloudflare.com:3478" }
+    ]
+};
+
+
 /* ==================================================
    ROOM
 ================================================== */
@@ -1471,8 +1125,6 @@ const myId =
 const nameBox =
     document.getElementById("name");
 
-const videoTarget =
-    document.getElementById("videoTarget");
 
 const textBox =
     document.getElementById("text");
@@ -1543,16 +1195,6 @@ function renderOnlineUsers() {
         }
     );
 
-    const datalist = document.getElementById("privateCallUsers");
-    if (datalist) {
-        datalist.innerHTML = "";
-        onlineUsers.forEach(user => {
-            if (user.id === myId) return;
-            const option = document.createElement("option");
-            option.value = user.name;
-            datalist.appendChild(option);
-        });
-    }
 
 }
 
@@ -1644,9 +1286,6 @@ function kickBannedUser(name) {
         "sendButton"
     ).disabled = true;
 
-    document.getElementById(
-        "videoRequestButton"
-    ).disabled = true;
 
     try {
         chat.close();
@@ -1971,11 +1610,7 @@ function showNotification(title, text, kind = "info", duration = 4500) {
 }
 
 function updateNotificationButton() {
-    const button = document.getElementById("enableNotifications");
-    if (!button) return;
-
-    button.textContent = "🔔 Notifications On";
-    button.disabled = false;
+    syncNotificationButton();
 }
 
 let serviceWorkerRegistration = null;
@@ -1984,9 +1619,11 @@ async function registerAppServiceWorker() {
     if (!("serviceWorker" in navigator) || !window.isSecureContext) return null;
     try {
         serviceWorkerRegistration = await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+        await navigator.serviceWorker.ready;
         return serviceWorkerRegistration;
     } catch (error) {
         console.warn("Service worker registration failed:", error);
+        serviceWorkerRegistration = null;
         return null;
     }
 }
@@ -2013,19 +1650,30 @@ function syncNotificationButton() {
 
 async function requestDesktopNotifications() {
     if (!window.isSecureContext || !("Notification" in window)) {
-        showNotification("🔔 Notifications unavailable", "Open this site over HTTPS to enable desktop notifications.", "warning");
+        showNotification("🔔 Notifications unavailable", "Open this site over HTTPS to enable notifications.", "warning");
         return false;
     }
     try {
-        await registerAppServiceWorker();
+        // Request permission before any awaited setup so Android Chrome keeps the user gesture.
         const permission = await Notification.requestPermission();
         syncNotificationButton();
+
         if (permission === "granted") {
-            showNotification("🔔 Notifications enabled", "Desktop alerts are now enabled for messages and incoming calls.", "success");
+            const registration = await registerAppServiceWorker();
+            if (registration) {
+                await registration.showNotification("TChat notifications enabled", {
+                    body: "You can now receive chat and incoming-call alerts.",
+                    icon: "./icon-192.png",
+                    badge: "./icon-192.png",
+                    tag: "tchat-notification-setup",
+                    data: { url: window.location.href, kind: "setup" }
+                });
+            }
+            showNotification("🔔 Notifications enabled", "Chat and incoming-call alerts are enabled.", "success");
             return true;
         }
         if (permission === "denied") {
-            showNotification("🔕 Notifications blocked", "Allow notifications for this site in browser settings to enable them.", "warning");
+            showNotification("🔕 Notifications blocked", "Allow notifications for TChat in Android site settings.", "warning");
         }
         return false;
     } catch (error) {
@@ -2041,18 +1689,20 @@ async function showDesktopNotification(title, text, kind = "message", requireInt
         body: text,
         icon: "./icon-192.png",
         badge: "./icon-192.png",
-        tag: kind === "call" ? "incoming-call" : "chat-message",
-        renotify: kind === "call",
-        requireInteraction,
+        tag: kind === "call" ? "incoming-call" : (kind === "message" ? "chat-message" : "tchat-notification"),
+        renotify: true,
+        requireInteraction: kind === "call" || requireInteraction,
+        vibrate: kind === "call" ? [250, 120, 250, 120, 450] : [120],
         data: { url: window.location.href, kind }
     };
     try {
-        if (!serviceWorkerRegistration) await registerAppServiceWorker();
-        if (serviceWorkerRegistration) {
-            await serviceWorkerRegistration.showNotification(title, options);
-        } else {
-            new Notification(title, options);
+        const registration = serviceWorkerRegistration || await registerAppServiceWorker();
+        if (registration) {
+            await registration.showNotification(title, options);
+            return;
         }
+        // Desktop-only fallback. Android Chrome is handled through the service worker above.
+        if (typeof Notification === "function") new Notification(title, options);
     } catch (error) {
         console.warn("Desktop notification failed:", error);
     }
@@ -2660,1223 +2310,6 @@ textBox.addEventListener(
 
     }
 );
-
-
-/* ==================================================
-   VIDEO REQUEST
-================================================== */
-
-let pendingVideoRequest = null;
-
-function createPrivateVideoRoom() {
-
-    return "video-" +
-        crypto.randomUUID();
-
-}
-
-document.getElementById(
-    "videoRequestButton"
-).onclick =
-    () => {
-
-        const senderName =
-            nameBox.value.trim();
-
-        const targetName =
-            videoTarget.value.trim();
-
-        if (!senderName) {
-
-            alert(
-                "Enter your name first."
-            );
-
-            nameBox.focus();
-
-            return;
-
-        }
-
-        if (!targetName) {
-
-            alert(
-                "Enter the name of the person you want to call."
-            );
-
-            videoTarget.focus();
-
-            return;
-
-        }
-
-        if (checkCurrentNameBan())
-            return;
-
-        let targetUser = null;
-
-        onlineUsers.forEach(
-            user => {
-
-                if (
-                    normalizedName(user.name) ===
-                    normalizedName(targetName)
-                ) {
-
-                    targetUser = user;
-
-                }
-
-            }
-        );
-
-        if (!targetUser) {
-
-            alert(
-                targetName +
-                " is not currently connected to this room."
-            );
-
-            return;
-
-        }
-
-        if (
-            targetUser.id === myId
-        ) {
-
-            alert(
-                "You cannot call yourself."
-            );
-
-            return;
-
-        }
-
-        const privateRoom =
-            createPrivateVideoRoom();
-
-        chat.send({
-
-            type:
-                "videoRequest",
-
-            fromId:
-                myId,
-
-            fromName:
-                senderName,
-
-            toId:
-                targetUser.id,
-
-            toName:
-                targetUser.name,
-
-            privateRoom:
-                privateRoom
-
-        });
-
-        document.getElementById(
-            "videoRequestButton"
-        ).textContent =
-            "📞 Request Sent";
-
-        document.getElementById(
-            "videoRequestButton"
-        ).disabled =
-            true;
-
-        setTimeout(
-            () => {
-
-                document.getElementById(
-                    "videoRequestButton"
-                ).textContent =
-                    "📹 Video Request";
-
-                document.getElementById(
-                    "videoRequestButton"
-                ).disabled =
-                    false;
-
-            },
-            3000
-        );
-
-    };
-
-
-/* ==================================================
-   RECEIVE VIDEO REQUEST
-================================================== */
-
-function showVideoRequest(data) {
-
-    pendingVideoRequest =
-        data;
-
-    document.getElementById(
-        "videoRequestText"
-    ).textContent =
-        data.fromName +
-        " wants to video call you.";
-
-    document.getElementById(
-        "videoRequest"
-    ).style.display =
-        "flex";
-
-    startCallRinger();
-
-}
-
-
-/* ==================================================
-   ACCEPT VIDEO
-================================================== */
-
-document.getElementById(
-    "acceptVideo"
-).onclick =
-    () => {
-
-        stopCallRinger();
-
-        if (!pendingVideoRequest)
-            return;
-
-        const request =
-            pendingVideoRequest;
-
-        const myName =
-            nameBox.value.trim();
-
-        chat.send({
-
-            type:
-                "videoAccepted",
-
-            fromId:
-                myId,
-
-            fromName:
-                myName,
-
-            toId:
-                request.fromId,
-
-            privateRoom:
-                request.privateRoom
-
-        });
-
-        document.getElementById(
-            "videoRequest"
-        ).style.display =
-            "none";
-
-        openVideoCall(
-            request.privateRoom,
-            request.fromName
-        );
-
-        pendingVideoRequest =
-            null;
-
-    };
-
-
-/* ==================================================
-   DECLINE VIDEO
-================================================== */
-
-document.getElementById(
-    "declineVideo"
-).onclick =
-    () => {
-
-        stopCallRinger();
-
-        if (!pendingVideoRequest)
-            return;
-
-        chat.send({
-
-            type:
-                "videoDeclined",
-
-            fromId:
-                myId,
-
-            toId:
-                pendingVideoRequest.fromId,
-
-            fromName:
-                nameBox.value.trim()
-
-        });
-
-        document.getElementById(
-            "videoRequest"
-        ).style.display =
-            "none";
-
-        pendingVideoRequest =
-            null;
-
-    };
-
-
-/* ==================================================
-   VIDEO VARIABLES
-================================================== */
-
-let videoSocket = null;
-let videoPC = null;
-let videoLocalStream = null;
-let videoRoom = null;
-let videoOtherName = "";
-let videoStarted = false;
-
-let screenStream = null;
-let screenSender = null;
-
-
-/* ==================================================
-   WEBRTC
-================================================== */
-
-const rtcConfig = {
-
-    iceServers: [
-
-        {
-            urls:
-                "stun:stun.l.google.com:19302"
-        }
-
-    ]
-
-};
-
-
-/* ==================================================
-   OPEN VIDEO CALL
-================================================== */
-
-async function openVideoCall(
-    privateRoom,
-    otherName
-) {
-
-    stopCallRinger();
-
-    videoRoom =
-        privateRoom;
-
-    videoOtherName =
-        otherName || "";
-
-    document.getElementById(
-        "videoCall"
-    ).style.display =
-        "block";
-
-    document.getElementById(
-        "videoChatMessages"
-    ).innerHTML = "";
-    setPrivateChatVisible(true);
-
-    document.getElementById(
-        "videoStatus"
-    ).textContent =
-        "Starting camera...";
-
-    document.getElementById(
-        "videoWaitingText"
-    ).textContent =
-        "Waiting for " +
-        (otherName || "the other person") +
-        "...";
-
-    try {
-
-        videoLocalStream =
-            await navigator.mediaDevices
-                .getUserMedia({
-
-                    video: true,
-                    audio: true
-
-                });
-
-        document.getElementById(
-            "localVideo"
-        ).srcObject =
-            videoLocalStream;
-
-        videoStarted = true;
-
-    } catch (error) {
-
-        console.error(error);
-
-        alert(
-            "Camera and microphone permission is required for video calls."
-        );
-
-        closeVideoCall();
-
-        return;
-
-    }
-
-    videoSocket =
-        connect(videoRoom);
-
-    videoSocket.on(
-        "open",
-        () => {
-
-            document.getElementById(
-                "videoStatus"
-            ).textContent =
-                "● Connected";
-
-            videoSignal({
-
-                type:
-                    "videoJoin",
-
-                id:
-                    myId,
-
-                name:
-                    nameBox.value.trim()
-
-            });
-
-        }
-    );
-
-    videoSocket.on(
-        "message",
-        handleVideoSignal
-    );
-
-}
-
-
-function addVideoChatMessage(name, text, mine = false) {
-
-    const box = document.getElementById("videoChatMessages");
-    if (!box) return;
-
-    const item = document.createElement("div");
-    item.className = "videoChatMessage" + (mine ? " mine" : "");
-
-    const nameEl = document.createElement("div");
-    nameEl.className = "videoChatMessageName";
-    nameEl.textContent = name || "Anonymous";
-
-    const textEl = document.createElement("div");
-    textEl.className = "videoChatMessageText";
-    textEl.textContent = text || "";
-
-    item.appendChild(nameEl);
-    item.appendChild(textEl);
-    box.appendChild(item);
-    box.scrollTop = box.scrollHeight;
-}
-
-function sendVideoChatMessage() {
-
-    const input = document.getElementById("videoChatInput");
-    if (!input) return;
-
-    const text = input.value.trim();
-    if (!text || !videoSocket) return;
-
-    videoSignal({
-        type: "videoChat",
-        text: text,
-        name: nameBox.value.trim() || "Anonymous"
-    });
-
-    addVideoChatMessage(
-        nameBox.value.trim() || "You",
-        text,
-        true
-    );
-
-    input.value = "";
-    input.focus();
-}
-
-/* ==================================================
-   VIDEO SIGNAL
-================================================== */
-
-function videoSignal(data) {
-
-    if (!videoSocket)
-        return;
-
-    videoSocket.send({
-
-        ...data,
-
-        from:
-            myId
-
-    });
-
-}
-
-
-/* ==================================================
-   CREATE PEER
-================================================== */
-
-async function ensureVideoConnection() {
-
-    if (videoPC)
-        return;
-
-    videoPC =
-        new RTCPeerConnection(
-            rtcConfig
-        );
-
-    if (videoLocalStream) {
-
-        videoLocalStream
-            .getTracks()
-            .forEach(
-                track => {
-
-                    videoPC.addTrack(
-                        track,
-                        videoLocalStream
-                    );
-
-                }
-            );
-
-    }
-
-    videoPC.ontrack =
-        event => {
-
-            if (
-                event.streams &&
-                event.streams[0]
-            ) {
-
-                document.getElementById(
-                    "remoteVideo"
-                ).srcObject =
-                    event.streams[0];
-
-            }
-
-            document.getElementById(
-                "videoWaiting"
-            ).style.display =
-                "none";
-
-            document.getElementById(
-                "videoStatus"
-            ).textContent =
-                "🟢 Call connected";
-
-        };
-
-    videoPC.onicecandidate =
-        event => {
-
-            if (event.candidate) {
-
-                videoSignal({
-
-                    type:
-                        "videoIce",
-
-                    candidate:
-                        event.candidate
-
-                });
-
-            }
-
-        };
-
-    videoPC.onconnectionstatechange =
-        () => {
-
-            if (!videoPC)
-                return;
-
-            const state =
-                videoPC.connectionState;
-
-            if (
-                state ===
-                "connected"
-            ) {
-
-                document.getElementById(
-                    "videoStatus"
-                ).textContent =
-                    "🟢 Call connected";
-
-            }
-
-            if (
-                state === "disconnected" ||
-                state === "failed"
-            ) {
-
-                document.getElementById(
-                    "videoStatus"
-                ).textContent =
-                    "🔴 Call disconnected";
-
-            }
-
-        };
-
-}
-
-
-/* ==================================================
-   VIDEO SIGNALING
-================================================== */
-
-async function handleVideoSignal(packet) {
-
-    const data =
-        packet.message;
-
-    if (!data)
-        return;
-
-    if (
-        data.from === myId
-    )
-        return;
-
-    if (
-        data.type ===
-        "videoChat"
-    ) {
-
-        if (data.from !== myId) {
-            notifyUser("💬 Video call chat", (data.name || videoOtherName || "Someone") + ": " + (data.text || ""));
-        }
-
-        addVideoChatMessage(
-            data.name || videoOtherName || "Guest",
-            data.text || "",
-            false
-        );
-
-        return;
-
-    }
-
-    if (
-        data.type ===
-        "videoJoin"
-    ) {
-
-        await ensureVideoConnection();
-
-        if (
-            myId <
-            data.from
-        ) {
-
-            await makeVideoOffer();
-
-        }
-
-        return;
-
-    }
-
-    if (
-        data.type ===
-        "videoOffer"
-    ) {
-
-        await ensureVideoConnection();
-
-        await videoPC.setRemoteDescription(
-            new RTCSessionDescription(
-                data.offer
-            )
-        );
-
-        const answer =
-            await videoPC.createAnswer();
-
-        await videoPC.setLocalDescription(
-            answer
-        );
-
-        videoSignal({
-
-            type:
-                "videoAnswer",
-
-            answer:
-                videoPC.localDescription
-
-        });
-
-        return;
-
-    }
-
-    if (
-        data.type ===
-        "videoAnswer"
-    ) {
-
-        if (!videoPC)
-            return;
-
-        await videoPC.setRemoteDescription(
-            new RTCSessionDescription(
-                data.answer
-            )
-        );
-
-        return;
-
-    }
-
-    if (
-        data.type ===
-        "videoIce"
-    ) {
-
-        if (!videoPC)
-            return;
-
-        try {
-
-            await videoPC.addIceCandidate(
-                new RTCIceCandidate(
-                    data.candidate
-                )
-            );
-
-        } catch (error) {
-
-            console.log(
-                "Video ICE error:",
-                error
-            );
-
-        }
-
-        return;
-
-    }
-
-    if (
-        data.type ===
-        "videoHangup"
-    ) {
-
-        stopCallRinger();
-
-        document.getElementById(
-            "videoStatus"
-        ).textContent =
-            "The other person ended the call.";
-
-        setTimeout(
-            closeVideoCall,
-            800
-        );
-
-    }
-
-}
-
-
-/* ==================================================
-   OFFER
-================================================== */
-
-async function makeVideoOffer() {
-
-    if (!videoStarted)
-        return;
-
-    await ensureVideoConnection();
-
-    if (
-        videoPC.signalingState !==
-        "stable"
-    )
-        return;
-
-    const offer =
-        await videoPC.createOffer();
-
-    await videoPC.setLocalDescription(
-        offer
-    );
-
-    videoSignal({
-
-        type:
-            "videoOffer",
-
-        offer:
-            videoPC.localDescription
-
-    });
-
-}
-
-
-/* ==================================================
-   SCREEN SHARING
-================================================== */
-
-async function startScreenShare() {
-    if (!videoPC) {
-        alert("Connect the video call first.");
-        return;
-    }
-
-    if (!navigator.mediaDevices ||
-        typeof navigator.mediaDevices.getDisplayMedia !== "function") {
-        alert("This browser does not support web screen sharing. Try the latest Chrome over HTTPS.");
-        return;
-    }
-
-    try {
-        // Minimal request is more compatible with mobile browsers.
-        // This must remain inside the button click handler.
-        screenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: false
-        });
-
-        const screenTrack = screenStream.getVideoTracks()[0];
-        if (!screenTrack) throw new Error("No screen track was returned.");
-
-        screenSender = videoPC.getSenders().find(
-            sender => sender.track && sender.track.kind === "video"
-        );
-        if (!screenSender) throw new Error("No video sender is available.");
-
-        await screenSender.replaceTrack(screenTrack);
-
-        const screenVideo = document.getElementById("screenVideo");
-        const localVideo = document.getElementById("localVideo");
-        const shareButton = document.getElementById("shareScreen");
-        const status = document.getElementById("videoStatus");
-
-        if (screenVideo) {
-            screenVideo.srcObject = screenStream;
-            screenVideo.autoplay = true;
-            screenVideo.muted = true;
-            screenVideo.playsInline = true;
-            screenVideo.style.display = "block";
-            screenVideo.play().catch(() => {});
-        }
-        if (localVideo) localVideo.style.display = "none";
-        if (shareButton) shareButton.textContent = "🛑 Stop Sharing";
-        if (status) status.textContent = "🖥️ You are sharing your screen";
-
-        screenTrack.onended = () => {
-            if (screenStream) stopScreenShare();
-        };
-    } catch (error) {
-        console.error("Screen sharing failed:", error);
-        if (screenStream) {
-            screenStream.getTracks().forEach(track => track.stop());
-            screenStream = null;
-        }
-        if (error && error.name !== "AbortError" && error.name !== "NotAllowedError") {
-            alert("Screen sharing could not start: " + (error.message || error.name || "Unknown error"));
-        }
-    }
-}
-
-async function stopScreenShare() {
-
-    if (!screenStream)
-        return;
-
-    try {
-
-        const cameraTrack =
-            videoLocalStream
-                ?.getVideoTracks()[0];
-
-        if (
-            screenSender &&
-            cameraTrack
-        ) {
-
-            await screenSender.replaceTrack(
-                cameraTrack
-            );
-
-        }
-
-    } catch {}
-
-    screenStream
-        .getTracks()
-        .forEach(
-            track =>
-                track.stop()
-        );
-
-    screenStream = null;
-    screenSender = null;
-
-    document.getElementById(
-        "screenVideo"
-    ).srcObject =
-        null;
-
-    document.getElementById(
-        "screenVideo"
-    ).style.display =
-        "none";
-
-    document.getElementById(
-        "localVideo"
-    ).style.display =
-        "block";
-
-    document.getElementById(
-        "shareScreen"
-    ).textContent =
-        "🖥️ Share Screen";
-
-    document.getElementById(
-        "videoStatus"
-    ).textContent =
-        "🟢 Call connected";
-
-}
-
-document.getElementById(
-    "shareScreen"
-).onclick =
-    () => {
-
-        if (screenStream) {
-
-            stopScreenShare();
-
-        } else {
-
-            startScreenShare();
-
-        }
-
-    };
-
-
-
-/* ==================================================
-   MOBILE CAMERA SWITCH
-================================================== */
-
-let videoFacingMode = "user";
-
-async function switchVideoCamera() {
-    if (!videoPC || !videoLocalStream || !navigator.mediaDevices) return;
-
-    const oldTrack = videoLocalStream.getVideoTracks()[0];
-    if (!oldTrack) return;
-
-    const nextFacing = videoFacingMode === "user" ? "environment" : "user";
-
-    try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: nextFacing } },
-            audio: false
-        });
-        const newTrack = newStream.getVideoTracks()[0];
-        if (!newTrack) throw new Error("No camera track returned.");
-
-        const sender = videoPC.getSenders().find(
-            s => s.track && s.track.kind === "video"
-        );
-        if (!sender) throw new Error("No video sender available.");
-
-        await sender.replaceTrack(newTrack);
-        oldTrack.stop();
-
-        // Keep the existing stream object used elsewhere by TChat.
-        videoLocalStream.removeTrack(oldTrack);
-        videoLocalStream.addTrack(newTrack);
-
-        const localVideo = document.getElementById("localVideo");
-        if (localVideo) {
-            localVideo.srcObject = videoLocalStream;
-            localVideo.play().catch(() => {});
-        }
-
-        videoFacingMode = nextFacing;
-
-        const button = document.getElementById("videoSwitchCamera");
-        if (button) {
-            button.textContent =
-                videoFacingMode === "user"
-                    ? "🔄 Rear Camera"
-                    : "🔄 Front Camera";
-        }
-    } catch (error) {
-        console.error("Camera switch failed:", error);
-        alert("Your phone could not switch cameras.");
-    }
-}
-
-document.getElementById("videoSwitchCamera").addEventListener("click", switchVideoCamera);
-
-/* ==================================================
-   MUTE
-================================================== */
-
-document.getElementById(
-    "videoMute"
-).onclick =
-    () => {
-
-        if (!videoLocalStream)
-            return;
-
-        const tracks =
-            videoLocalStream
-                .getAudioTracks();
-
-        tracks.forEach(
-            track => {
-
-                track.enabled =
-                    !track.enabled;
-
-            }
-        );
-
-        const muted =
-            !tracks[0]?.enabled;
-
-        document.getElementById(
-            "videoMute"
-        ).textContent =
-            muted
-                ? "🔇 Unmute"
-                : "🎤 Mute";
-
-    };
-
-
-/* ==================================================
-   CAMERA
-================================================== */
-
-document.getElementById(
-    "videoCamera"
-).onclick =
-    () => {
-
-        if (!videoLocalStream)
-            return;
-
-        const tracks =
-            videoLocalStream
-                .getVideoTracks();
-
-        tracks.forEach(
-            track => {
-
-                track.enabled =
-                    !track.enabled;
-
-            }
-        );
-
-        const off =
-            !tracks[0]?.enabled;
-
-        document.getElementById(
-            "videoCamera"
-        ).textContent =
-            off
-                ? "📷 Camera On"
-                : "📷 Camera Off";
-
-    };
-
-
-/* ==================================================
-   HANG UP
-================================================== */
-
-document.getElementById(
-    "videoHangup"
-).onclick =
-    () => {
-
-        stopCallRinger();
-
-        stopScreenShare();
-
-        try {
-
-            videoSignal({
-
-                type:
-                    "videoHangup"
-
-            });
-
-        } catch {}
-
-        closeVideoCall();
-
-    };
-
-
-/* ==================================================
-   CLOSE VIDEO CALL
-================================================== */
-
-document.getElementById("videoChatSend").onclick = sendVideoChatMessage;
-
-function setPrivateChatVisible(visible){
-    const main=document.getElementById("videoMain");
-    const button=document.getElementById("videoChatToggle");
-    if(!main)return;
-    main.classList.toggle("chatHidden", !visible);
-    if(button)button.textContent=visible ? "💬 Hide Chat" : "💬 Show Chat";
-}
-
-document.getElementById("videoChatToggle").onclick=()=>{
-    const main=document.getElementById("videoMain");
-    setPrivateChatVisible(main?.classList.contains("chatHidden"));
-};
-
-document.getElementById("videoChatInput").addEventListener("keydown", event => {
-    if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        sendVideoChatMessage();
-    }
-});
-
-function closeVideoCall() {
-
-    stopCallRinger();
-
-    if (screenStream) {
-
-        screenStream
-            .getTracks()
-            .forEach(
-                track =>
-                    track.stop()
-            );
-
-        screenStream = null;
-
-    }
-
-    if (videoPC) {
-
-        videoPC.ontrack = null;
-        videoPC.onicecandidate = null;
-
-        videoPC.close();
-
-        videoPC = null;
-
-    }
-
-    if (videoLocalStream) {
-
-        videoLocalStream
-            .getTracks()
-            .forEach(
-                track =>
-                    track.stop()
-            );
-
-        videoLocalStream = null;
-
-    }
-
-    if (videoSocket) {
-
-        try {
-            videoSocket.close();
-        } catch {}
-
-        videoSocket = null;
-
-    }
-
-    document.getElementById(
-        "remoteVideo"
-    ).srcObject =
-        null;
-
-    document.getElementById(
-        "localVideo"
-    ).srcObject =
-        null;
-
-    document.getElementById(
-        "screenVideo"
-    ).srcObject =
-        null;
-
-    document.getElementById(
-        "screenVideo"
-    ).style.display =
-        "none";
-
-    document.getElementById(
-        "localVideo"
-    ).style.display =
-        "block";
-
-    document.getElementById(
-        "shareScreen"
-    ).textContent =
-        "🖥️ Share Screen";
-
-    document.getElementById(
-        "videoCall"
-    ).style.display =
-        "none";
-
-    document.getElementById(
-        "videoWaiting"
-    ).style.display =
-        "flex";
-
-    videoStarted = false;
-    videoRoom = null;
-    screenSender = null;
-
-}
 
 
 /* ==================================================
@@ -4940,79 +3373,6 @@ chat.on(
         }
 
 
-        /* VIDEO REQUEST */
-
-        if (
-            message.type ===
-            "videoRequest"
-        ) {
-
-            if (
-                message.toId ===
-                myId
-            ) {
-
-                showVideoRequest(
-                    message
-                );
-                notifyUser("📹 Incoming video call", (message.fromName || "Someone") + " is calling you.", "call", true);
-
-            }
-
-            return;
-
-        }
-
-
-        /* VIDEO ACCEPTED */
-
-        if (
-            message.type ===
-            "videoAccepted"
-        ) {
-
-            if (
-                message.toId ===
-                myId
-            ) {
-
-                openVideoCall(
-                    message.privateRoom,
-                    message.fromName
-                );
-
-            }
-
-            return;
-
-        }
-
-
-        /* VIDEO DECLINED */
-
-        if (
-            message.type ===
-            "videoDeclined"
-        ) {
-
-            if (
-                message.toId ===
-                myId
-            ) {
-
-                alert(
-                    (message.fromName ||
-                        "The user") +
-                    " declined the video call."
-                );
-
-            }
-
-            return;
-
-        }
-
-
         /* FILE SHARING */
 
         if (
@@ -5425,40 +3785,6 @@ window.addEventListener(
         stopCallRinger();
         closeFilePeer();
 
-        if (screenStream) {
-
-            screenStream
-                .getTracks()
-                .forEach(
-                    track =>
-                        track.stop()
-                );
-
-        }
-
-        try {
-
-            if (videoSocket) {
-
-                videoSignal({
-                    type:
-                        "videoHangup"
-                });
-
-            }
-
-        } catch {}
-
-        if (videoLocalStream) {
-
-            videoLocalStream
-                .getTracks()
-                .forEach(
-                    track =>
-                        track.stop()
-                );
-
-        }
 
     }
 );
@@ -5491,40 +3817,6 @@ window.addEventListener(
   };
   document.addEventListener("click",e=>{
     if(!$("moreTools").contains(e.target)) $("toolsMenu").classList.remove("open");
-  });
-
-  // Private video call launcher
-  function refreshPrivateCallUsers(){
-    const list=$("privateCallUsers");
-    if(!list) return;
-    list.innerHTML="";
-    onlineUsers.forEach(user=>{
-      if(user.id===myId) return;
-      const option=document.createElement("option");
-      option.value=user.name;
-      list.appendChild(option);
-    });
-  }
-  function openPrivateCall(){
-    refreshPrivateCallUsers();
-    $("privateCallTarget").value="";
-    $("privateCallModal").style.display="flex";
-    $("toolsMenu").classList.remove("open");
-    setTimeout(()=>$("privateCallTarget").focus(),0);
-  }
-  function closePrivateCall(){ $("privateCallModal").style.display="none"; }
-  $("privateCallButton").onclick=openPrivateCall;
-  $("quickPrivateCall").onclick=openPrivateCall;
-  $("closePrivateCall").onclick=closePrivateCall;
-  $("startPrivateCall").onclick=()=>{
-    const target=$("privateCallTarget").value.trim();
-    if(!target){ alert("Enter the name of the person you want to call."); return; }
-    $("videoTarget").value=target;
-    closePrivateCall();
-    $("videoRequestButton").click();
-  };
-  $("privateCallTarget").addEventListener("keydown",e=>{
-    if(e.key==="Enter"){$("startPrivateCall").click();}
   });
 
   // Shared timer
