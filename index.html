@@ -599,92 +599,81 @@ button.screenButton {
 /* =========================
    FILE SHARING
 ========================= */
-#fileShare {
-    max-width: 850px;
-    margin: 10px auto;
-    padding: 0 20px;
+#fileShare{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:52000;
+    align-items:center;
+    justify-content:center;
+    padding:18px;
+    background:rgba(8,14,25,.58);
 }
-#fileShareBox {
-    background: white;
-    border-radius: 10px;
-    padding: 12px;
-    box-shadow: 0 1px 3px #ccc;
+#fileShare.open{display:flex}
+#fileShareBox{
+    width:min(560px,100%);
+    max-height:min(90vh,700px);
+    overflow:auto;
+    background:var(--surface);
+    color:var(--text);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:18px;
+    box-shadow:var(--shadow);
 }
-#fileShareRow {
-    display: flex;
-    gap: 7px;
-    align-items: center;
-    flex-wrap: wrap;
+#fileShareHeader{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:12px;
 }
-#fileTarget {
-    width: 150px;
+#fileShareTitle{
+    margin:0;
+    font-size:19px;
 }
-#filePicker {
-    display: none;
+#fileShareClose{
+    width:40px;
+    height:40px;
+    padding:0;
+    border-radius:50%;
+    background:var(--surface2);
+    color:var(--text);
+    border:1px solid var(--line);
+    font-size:18px;
 }
-#selectedFile {
-    flex: 1;
-    min-width: 180px;
-    color: #666;
-    font-size: 13px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+#fileShareRow{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
 }
-#fileProgress {
-    margin-top: 9px;
-    display: none;
+#fileTarget{width:180px}
+#filePicker{display:none}
+#selectedFile{
+    flex:1;
+    min-width:180px;
+    color:var(--muted);
+    font-size:13px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
 }
-#fileProgressBar {
-    width: 100%;
-    height: 10px;
+#fileProgress{margin-top:10px;display:none}
+#fileProgressBar{width:100%;height:10px}
+#fileProgressText{font-size:12px;color:var(--muted);margin-top:4px}
+#fileTransferStatus{
+    margin-top:10px;
+    color:var(--muted);
+    font-size:12px;
+    min-height:18px;
 }
-#fileProgressText {
-    font-size: 12px;
-    color: #777;
-    margin-top: 4px;
+@media(max-width:700px){
+    #fileShare{padding:12px}
+    #fileShareBox{padding:15px;border-radius:18px}
+    #fileShareRow{display:grid;grid-template-columns:1fr;gap:8px}
+    #fileTarget,#selectedFile,#fileShareRow button{width:100%;min-width:0}
 }
-#incomingFile {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,.72);
-    z-index: 28000;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-#incomingFileBox {
-    width: 100%;
-    max-width: 430px;
-    background: white;
-    border-radius: 16px;
-    padding: 25px;
-    text-align: center;
-    box-shadow: 0 15px 50px rgba(0,0,0,.4);
-}
-#incomingFileBox h2 { margin-top: 0; }
-#incomingFileInfo { color: #666; line-height: 1.5; }
-#incomingFileButtons {
-    display: flex;
-    gap: 10px;
-    margin-top: 18px;
-}
-#incomingFileButtons button { flex: 1; }
-#declineFile { background: #777; }
-#fileTransferStatus {
-    max-width: 850px;
-    margin: 8px auto;
-    padding: 0 20px;
-    color: #777;
-    font-size: 12px;
-}
-@media(max-width:700px) {
-    #fileTarget, #selectedFile { width: 100%; }
-    #fileShareRow button { width: 100%; }
-}
-
-
 /* =========================
    NOTIFICATION TOASTS
 ========================= */
@@ -809,14 +798,14 @@ body.dark #toolsMenu button{color:var(--text)}
   #share button:nth-child(n+3){display:none}
   #featureDock{overflow-x:auto}
   #onlineUsers{margin-top:6px}
-  #fileShare{display:none}
   #chat{padding:10px 9px 155px}
   .message{border-radius:14px;padding:10px 11px}
   #bottom{padding-bottom:max(8px,env(safe-area-inset-bottom))}
   #form{display:grid;grid-template-columns:1fr auto;gap:6px}
   #name{width:100%;grid-column:1 / -1}
   #text{grid-column:1;min-width:0}
-  #sendButton{grid-column:2;align-self:stretch;padding:0 15px}
+  #fileShareToggle{grid-column:2;align-self:stretch}
+  #sendButton{grid-column:3;align-self:stretch;padding:0 15px}
   #status{font-size:11px}
   #sharedTimerWidget{right:10px;bottom:82px}
   #groupCallGrid{grid-template-columns:repeat(2,minmax(0,1fr));padding:6px;gap:6px}
@@ -829,6 +818,22 @@ body.dark #toolsMenu button{color:var(--text)}
   .mobileOnlyCameraSwitch{display:inline-flex}
   #videoControls button,#groupCallControls button{min-height:44px;padding:9px 12px}
 }
+
+
+#fileShareToggle{
+    min-width:44px;
+    width:44px;
+    height:44px;
+    padding:0;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--surface2);
+    color:var(--text);
+    border:1px solid var(--line);
+    font-size:18px;
+}
+#fileShareToggle:hover{background:var(--line)}
 
 </style>
 </head>
@@ -880,8 +885,12 @@ body.dark #toolsMenu button{color:var(--text)}
 <!-- =========================
      FILE SHARING
 ========================= -->
-<div id="fileShare">
+<div id="fileShare" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="fileShareTitle">
     <div id="fileShareBox">
+        <div id="fileShareHeader">
+            <h2 id="fileShareTitle">📎 Share a File</h2>
+            <button id="fileShareClose" type="button" aria-label="Close">✕</button>
+        </div>
         <div id="fileShareRow">
             <input id="fileTarget" placeholder="Send file to name" maxlength="30">
             <button id="chooseFile">📎 Choose File</button>
@@ -939,6 +948,10 @@ body.dark #toolsMenu button{color:var(--text)}
             rows="2"
             maxlength="5000"
             placeholder="Write something..."></textarea>
+
+        <button id="fileShareToggle" type="button" aria-label="File sharing" title="Share a file">
+            📎
+        </button>
 
         <button id="sendButton">
             Send
@@ -4204,6 +4217,36 @@ function setFileProgress(done, total, text) {
     fileProgressText.textContent =
         text || (formatFileSize(done) + " / " + formatFileSize(total));
 }
+
+
+function openFileSharePopup() {
+    const panel = document.getElementById("fileShare");
+    if (!panel) return;
+    panel.classList.add("open");
+    panel.setAttribute("aria-hidden", "false");
+    setTimeout(() => {
+        const target = document.getElementById("fileTarget");
+        if (target) target.focus();
+    }, 0);
+}
+
+function closeFileSharePopup() {
+    const panel = document.getElementById("fileShare");
+    if (!panel) return;
+    panel.classList.remove("open");
+    panel.setAttribute("aria-hidden", "true");
+}
+
+document.getElementById("fileShareToggle").addEventListener("click", openFileSharePopup);
+document.getElementById("fileShareClose").addEventListener("click", closeFileSharePopup);
+
+document.getElementById("fileShare").addEventListener("click", event => {
+    if (event.target === event.currentTarget) closeFileSharePopup();
+});
+
+document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeFileSharePopup();
+});
 
 chooseFileButton.onclick = () => filePicker.click();
 
