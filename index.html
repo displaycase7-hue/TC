@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta http-equiv="Permissions-Policy" content="display-capture=(self)">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#252525">
@@ -822,6 +823,13 @@ body.dark #toolsMenu button{color:var(--text)}
   .groupTile,.groupTile video{min-height:130px}
 }
 
+
+.mobileOnlyCameraSwitch{display:none}
+@media(max-width:700px){
+  .mobileOnlyCameraSwitch{display:inline-flex}
+  #videoControls button,#groupCallControls button{min-height:44px;padding:9px 12px}
+}
+
 </style>
 </head>
 
@@ -1049,6 +1057,13 @@ body.dark #toolsMenu button{color:var(--text)}
         </button>
 
         <button
+            id="videoSwitchCamera"
+            class="videoGray mobileOnlyCameraSwitch"
+            type="button">
+            🔄 Switch Camera
+        </button>
+
+        <button
             id="shareScreen"
             class="screenButton">
             🖥️ Share Screen
@@ -1181,6 +1196,7 @@ body.dark #toolsMenu button{color:var(--text)}
   <div id="groupCallControls">
     <button id="groupMute">🎤 Mute</button>
     <button id="groupCamera">📷 Camera</button>
+    <button id="groupSwitchCamera">🔄 Switch Camera</button>
     <button id="groupScreen">🖥️ Share screen</button>
     <button id="groupHangup">☎ Leave call</button>
   </div>
@@ -3335,101 +3351,65 @@ async function makeVideoOffer() {
 ================================================== */
 
 async function startScreenShare() {
-
     if (!videoPC) {
-
-        alert(
-            "Connect the video call first."
-        );
-
+        alert("Connect the video call first.");
         return;
+    }
 
+    if (!navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getDisplayMedia !== "function") {
+        alert("This browser does not support web screen sharing. Try the latest Chrome over HTTPS.");
+        return;
     }
 
     try {
+        // Minimal request is more compatible with mobile browsers.
+        // This must remain inside the button click handler.
+        screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: false
+        });
 
-        screenStream =
-            await navigator.mediaDevices
-                .getDisplayMedia({
+        const screenTrack = screenStream.getVideoTracks()[0];
+        if (!screenTrack) throw new Error("No screen track was returned.");
 
-                    video: {
-                        cursor: "always"
-                    },
+        screenSender = videoPC.getSenders().find(
+            sender => sender.track && sender.track.kind === "video"
+        );
+        if (!screenSender) throw new Error("No video sender is available.");
 
-                    audio: true
+        await screenSender.replaceTrack(screenTrack);
 
-                });
+        const screenVideo = document.getElementById("screenVideo");
+        const localVideo = document.getElementById("localVideo");
+        const shareButton = document.getElementById("shareScreen");
+        const status = document.getElementById("videoStatus");
 
-        const screenTrack =
-            screenStream.getVideoTracks()[0];
-
-        screenSender =
-            videoPC
-                .getSenders()
-                .find(
-                    sender =>
-                        sender.track &&
-                        sender.track.kind ===
-                        "video"
-                );
-
-        if (!screenSender) {
-
-            alert(
-                "Unable to find the video connection."
-            );
-
-            stopScreenShare();
-
-            return;
-
+        if (screenVideo) {
+            screenVideo.srcObject = screenStream;
+            screenVideo.autoplay = true;
+            screenVideo.muted = true;
+            screenVideo.playsInline = true;
+            screenVideo.style.display = "block";
+            screenVideo.play().catch(() => {});
         }
+        if (localVideo) localVideo.style.display = "none";
+        if (shareButton) shareButton.textContent = "🛑 Stop Sharing";
+        if (status) status.textContent = "🖥️ You are sharing your screen";
 
-        await screenSender.replaceTrack(
-            screenTrack
-        );
-
-        screenTrack.onended =
-            () => {
-
-                stopScreenShare();
-
-            };
-
-        document.getElementById(
-            "screenVideo"
-        ).srcObject =
-            screenStream;
-
-        document.getElementById(
-            "screenVideo"
-        ).style.display =
-            "block";
-
-        document.getElementById(
-            "localVideo"
-        ).style.display =
-            "none";
-
-        document.getElementById(
-            "shareScreen"
-        ).textContent =
-            "🛑 Stop Sharing";
-
-        document.getElementById(
-            "videoStatus"
-        ).textContent =
-            "🖥️ You are sharing your screen";
-
+        screenTrack.onended = () => {
+            if (screenStream) stopScreenShare();
+        };
     } catch (error) {
-
-        console.log(
-            "Screen sharing cancelled:",
-            error
-        );
-
+        console.error("Screen sharing failed:", error);
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+            screenStream = null;
+        }
+        if (error && error.name !== "AbortError" && error.name !== "NotAllowedError") {
+            alert("Screen sharing could not start: " + (error.message || error.name || "Unknown error"));
+        }
     }
-
 }
 
 async function stopScreenShare() {
@@ -3510,6 +3490,64 @@ document.getElementById(
 
     };
 
+
+
+/* ==================================================
+   MOBILE CAMERA SWITCH
+================================================== */
+
+let videoFacingMode = "user";
+
+async function switchVideoCamera() {
+    if (!videoPC || !videoLocalStream || !navigator.mediaDevices) return;
+
+    const oldTrack = videoLocalStream.getVideoTracks()[0];
+    if (!oldTrack) return;
+
+    const nextFacing = videoFacingMode === "user" ? "environment" : "user";
+
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: nextFacing } },
+            audio: false
+        });
+        const newTrack = newStream.getVideoTracks()[0];
+        if (!newTrack) throw new Error("No camera track returned.");
+
+        const sender = videoPC.getSenders().find(
+            s => s.track && s.track.kind === "video"
+        );
+        if (!sender) throw new Error("No video sender available.");
+
+        await sender.replaceTrack(newTrack);
+        oldTrack.stop();
+
+        // Keep the existing stream object used elsewhere by TChat.
+        videoLocalStream.removeTrack(oldTrack);
+        videoLocalStream.addTrack(newTrack);
+
+        const localVideo = document.getElementById("localVideo");
+        if (localVideo) {
+            localVideo.srcObject = videoLocalStream;
+            localVideo.play().catch(() => {});
+        }
+
+        videoFacingMode = nextFacing;
+
+        const button = document.getElementById("videoSwitchCamera");
+        if (button) {
+            button.textContent =
+                videoFacingMode === "user"
+                    ? "🔄 Rear Camera"
+                    : "🔄 Front Camera";
+        }
+    } catch (error) {
+        console.error("Camera switch failed:", error);
+        alert("Your phone could not switch cameras.");
+    }
+}
+
+document.getElementById("videoSwitchCamera").addEventListener("click", switchVideoCamera);
 
 /* ==================================================
    MUTE
@@ -5478,20 +5516,102 @@ document.getElementById("groupCamera").onclick=()=>{
 };
 document.getElementById("groupScreen").onclick=async()=>{
   if(!groupActive)return;
+
   if(groupScreenStream){
     const cam=groupLocalStream?.getVideoTracks()[0];
-    groupPeers.forEach(p=>p.pc.getSenders().find(s=>s.track?.kind==="video")?.replaceTrack(cam));
-    groupScreenStream.getTracks().forEach(t=>t.stop());groupScreenStream=null;
-    document.getElementById("groupScreen").textContent="🖥️ Share screen";return;
+    groupPeers.forEach(p=>{
+      const sender=p.pc.getSenders().find(s=>s.track&&s.track.kind==="video");
+      if(sender&&cam)sender.replaceTrack(cam).catch(()=>{});
+    });
+    groupScreenStream.getTracks().forEach(t=>t.stop());
+    groupScreenStream=null;
+    document.getElementById("groupScreen").textContent="🖥️ Share screen";
+    return;
   }
+
+  if(!navigator.mediaDevices||typeof navigator.mediaDevices.getDisplayMedia!=="function"){
+    alert("This browser does not support screen sharing. Try the latest Chrome over HTTPS.");
+    return;
+  }
+
   try{
-    groupScreenStream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
+    groupScreenStream=await navigator.mediaDevices.getDisplayMedia({
+      video:true,
+      audio:false
+    });
+
     const track=groupScreenStream.getVideoTracks()[0];
-    groupPeers.forEach(p=>p.pc.getSenders().find(s=>s.track?.kind==="video")?.replaceTrack(track));
-    track.onended=()=>document.getElementById("groupScreen").click();
+    if(!track)throw new Error("No screen track was returned.");
+
+    groupPeers.forEach(p=>{
+      const sender=p.pc.getSenders().find(s=>s.track&&s.track.kind==="video");
+      if(sender)sender.replaceTrack(track).catch(()=>{});
+    });
+
+    track.onended=()=>{
+      if(groupScreenStream)document.getElementById("groupScreen").click();
+    };
+
     document.getElementById("groupScreen").textContent="🛑 Stop sharing";
-  }catch{}
+  }catch(e){
+    console.error("Group screen sharing failed:",e);
+    if(groupScreenStream){
+      groupScreenStream.getTracks().forEach(t=>t.stop());
+      groupScreenStream=null;
+    }
+    if(e&&e.name!=="AbortError"&&e.name!=="NotAllowedError"){
+      alert("Screen sharing could not start: "+(e.message||e.name||"Unknown error"));
+    }
+  }
 }
+
+
+async function switchGroupCamera() {
+  if(!groupLocalStream || !navigator.mediaDevices) return;
+
+  const oldTrack=groupLocalStream.getVideoTracks()[0];
+  if(!oldTrack)return;
+
+  const nextFacing=groupFacingMode==="user"?"environment":"user";
+
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:nextFacing}},
+      audio:false
+    });
+    const newTrack=stream.getVideoTracks()[0];
+    if(!newTrack)throw new Error("No camera track returned.");
+
+    groupPeers.forEach(p=>{
+      const sender=p.pc.getSenders().find(s=>s.track&&s.track.kind==="video");
+      if(sender)sender.replaceTrack(newTrack).catch(()=>{});
+    });
+
+    groupLocalStream.removeTrack(oldTrack);
+    groupLocalStream.addTrack(newTrack);
+    oldTrack.stop();
+
+    const localVideo=document.querySelector("#group-tile-local video");
+    if(localVideo){
+      localVideo.srcObject=groupLocalStream;
+      localVideo.play().catch(()=>{});
+    }
+
+    groupFacingMode=nextFacing;
+
+    const button=document.getElementById("groupSwitchCamera");
+    if(button){
+      button.textContent=groupFacingMode==="user"?"🔄 Rear Camera":"🔄 Front Camera";
+    }
+  }catch(error){
+    console.error("Group camera switch failed:",error);
+    alert("Your phone could not switch cameras.");
+  }
+}
+
+let groupFacingMode="user";
+document.getElementById("groupSwitchCamera").addEventListener("click",switchGroupCamera);
+
 
 chat.on("message",async({message})=>{
   if(!message||!groupActive)return;
