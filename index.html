@@ -718,8 +718,8 @@ button.screenButton {
 }
 body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
 header{background:var(--surface);color:var(--text);padding:12px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:100;box-shadow:0 2px 14px rgba(0,0,0,.05)}
-header h1{font-size:18px;display:flex;align-items:center;gap:8px}
-header h1:after{content:"TChat";font-weight:800;letter-spacing:-.3px}
+header h1{font-size:18px;display:flex;align-items:center;gap:8px;position:relative}
+header h1:after{content:"TChat";font-weight:800;letter-spacing:-.3px;position:absolute;left:50%;transform:translateX(-50%)}
 #room{background:var(--surface);color:var(--muted);padding:5px 12px;font-size:12px;border-bottom:1px solid var(--line)}
 #share{background:var(--surface);display:flex;justify-content:center;align-items:center;gap:7px;padding:8px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 #share button{background:var(--surface2);color:var(--text);border:1px solid var(--line);padding:8px 11px;border-radius:999px;font-size:12px}
