@@ -795,7 +795,9 @@ body.dark #toolsMenu button{color:var(--text)}
   header{padding:10px 14px}
   #share{justify-content:space-between}
   #share button{flex:1;min-width:0}
-  #share button:nth-child(n+3){display:none}
+  #share button:nth-child(3){display:flex!important}
+  #share #toolsGamesButton{display:inline-flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;position:relative;z-index:10}
+  #moreTools{display:none!important}
   #featureDock{overflow-x:auto}
   #onlineUsers{margin-top:6px}
   #chat{padding:10px 9px 155px}
@@ -899,7 +901,7 @@ body.dark #toolsMenu button{color:var(--text)}
 <div id="share">
     <button id="copyRoom">🔗 Share</button>
     <button id="themeToggle">🌙 Theme</button>
-    <button id="toolsGamesButton" type="button">✨ Tools &amp; Games</button>
+    <button id="toolsGamesButton" type="button" aria-label="Open Tools and Games">✨ Tools &amp; Games</button>
     <div id="moreTools">
         <button id="moreToolsButton">••• More</button>
         <div id="toolsMenu">
@@ -5881,6 +5883,23 @@ window.addEventListener("beforeunload",()=>{if(groupActive)closeGroupCall(false)
 
 
 <script>
+
+/* Mobile-safe Tools & Games opener: delegated handler also works if other app code changes the button later. */
+document.addEventListener("click",function(e){
+  const btn=e.target.closest && e.target.closest("#toolsGamesButton");
+  if(!btn)return;
+  const drawer=document.getElementById("toolsGamesDrawer");
+  if(!drawer)return;
+  e.preventDefault();
+  e.stopPropagation();
+  drawer.classList.add("open");
+  drawer.setAttribute("aria-hidden","false");
+  document.body.style.overflow="hidden";
+  const firstTab=drawer.querySelector('.toolsTab[data-tools-tab="alexTab"]');
+  const panels=drawer.querySelectorAll(".toolsTabPanel");
+  drawer.querySelectorAll(".toolsTab").forEach(t=>t.classList.toggle("active",t===firstTab));
+  panels.forEach(p=>{p.hidden=p.id!=="alexTab";p.classList.toggle("active",p.id==="alexTab")});
+},true);
 
 (function(){
   const drawer=document.getElementById("toolsGamesDrawer"), open=document.getElementById("toolsGamesButton"), close=document.getElementById("toolsGamesClose");
