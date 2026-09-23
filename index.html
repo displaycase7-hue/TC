@@ -6275,45 +6275,100 @@ function cleanAIOutput(text) {
 
 function createWorker() {
   if (localAIWorker || workerFailed || !window.Worker) return localAIWorker;
+
   const workerSource = `
     import { pipeline, TextStreamer, env } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1";
     env.useBrowserCache = true;
+
     let generator = null;
     let activeModel = "";
+    let activeDevice = "";
     let loading = false;
+
+    function send(type, payload={}) {
+      postMessage({type, ...payload});
+    }
+
     async function loadModel(model) {
       if (generator && activeModel === model) return generator;
-      if (loading) { while (loading) await new Promise(r=>setTimeout(r,60)); if (generator && activeModel===model) return generator; }
+
+      if (loading) {
+        while (loading) await new Promise(r=>setTimeout(r,60));
+        if (generator && activeModel === model) return generator;
+      }
+
       loading = true;
+      let lastError = null;
+      const devices = navigator.gpu ? ["webgpu","wasm"] : ["wasm"];
+
       try {
-        const device = navigator.gpu ? "webgpu" : "wasm";
-        postMessage({type:"status", status:"loading", device, model});
-        generator = await pipeline("text-generation", model, {
-          device,
-          dtype: "q4",
-          progress_callback: data => {
-            if (typeof data.progress === "number") postMessage({type:"progress", progress:data.progress});
+        for (const device of devices) {
+          try {
+            send("status", {device, model});
+            send("backendAttempt", {device, model});
+
+            const candidate = await pipeline("text-generation", model, {
+              device,
+              dtype: "q4",
+              progress_callback: data => {
+                if (typeof data?.progress === "number") {
+                  send("progress", {progress:data.progress, device, model});
+                }
+              }
+            });
+
+            generator = candidate;
+            activeModel = model;
+            activeDevice = device;
+            send("ready", {model, device});
+            return generator;
+          } catch (error) {
+            lastError = error;
+            generator = null;
+            activeModel = "";
+            activeDevice = "";
+            if (device !== "webgpu") break;
+            send("backendFallback", {
+              from:"webgpu",
+              to:"wasm",
+              model,
+              error:String(error?.message || error)
+            });
           }
-        });
-        activeModel = model;
-        postMessage({type:"ready", model, device});
-        return generator;
-      } finally { loading = false; }
+        }
+        throw lastError || new Error("Alex could not initialize a supported AI backend.");
+      } finally {
+        loading = false;
+      }
     }
+
     self.onmessage = async event => {
       const msg = event.data || {};
+
       if (msg.type === "load") {
-        try { await loadModel(msg.model); } catch (error) { postMessage({type:"error", error:String(error?.message||error), phase:"load"}); }
+        try {
+          await loadModel(msg.model);
+          send("loaded", {id:msg.id || 0, model:msg.model, device:activeDevice});
+        } catch (error) {
+          send("error", {id:msg.id || 0, error:String(error?.message || error), phase:"load"});
+        }
         return;
       }
+
       if (msg.type !== "generate") return;
+
       try {
         const gen = await loadModel(msg.model);
         let streamed = "";
+
         const streamer = new TextStreamer(gen.tokenizer, {
           skip_prompt:true,
-          callback_function:token=>{ streamed += token; postMessage({type:"token", id:msg.id, token}); }
+          callback_function:token=>{
+            streamed += token;
+            send("token", {id:msg.id, token});
+          }
         });
+
         const output = await gen(msg.messages, {
           max_new_tokens: msg.maxTokens,
           do_sample: true,
@@ -6322,6 +6377,7 @@ function createWorker() {
           repetition_penalty: msg.repetitionPenalty,
           streamer
         });
+
         let finalText = streamed;
         const generated = output?.[0]?.generated_text;
         if (Array.isArray(generated)) {
@@ -6330,19 +6386,29 @@ function createWorker() {
         } else if (typeof generated === "string" && generated.length > streamed.length) {
           finalText = generated;
         }
-        postMessage({type:"done", id:msg.id, text:finalText});
+
+        send("done", {id:msg.id, text:finalText, device:activeDevice});
       } catch (error) {
-        postMessage({type:"error", id:msg.id, error:String(error?.message||error), phase:"generate"});
+        send("error", {
+          id:msg.id,
+          error:String(error?.message || error),
+          phase:"generate",
+          device:activeDevice
+        });
       }
     };
   `;
+
   try {
     const blob = new Blob([workerSource], {type:"text/javascript"});
-    localAIWorker = new Worker(URL.createObjectURL(blob), {type:"module"});
+    const url = URL.createObjectURL(blob);
+    localAIWorker = new Worker(url, {type:"module"});
+    localAIWorker.__alexBlobURL = url;
     localAIWorker.addEventListener("message", handleWorkerMessage);
-    localAIWorker.addEventListener("error", () => {
+    localAIWorker.addEventListener("error", error => {
       workerFailed = true;
-      aiSetStatus("Alex worker could not start; using the browser thread instead.");
+      console.warn("Alex worker runtime error:", error);
+      aiSetStatus("Alex's background AI engine failed. Falling back to the main browser engine…", "", true);
     });
     return localAIWorker;
   } catch (error) {
@@ -6350,6 +6416,16 @@ function createWorker() {
     console.warn("Alex worker unavailable", error);
     return null;
   }
+}
+
+function destroyLocalAIWorker() {
+  if (!localAIWorker) return;
+  try { localAIWorker.terminate(); } catch {}
+  try {
+    if (localAIWorker.__alexBlobURL) URL.revokeObjectURL(localAIWorker.__alexBlobURL);
+  } catch {}
+  localAIWorker = null;
+  workerReady = false;
 }
 
 function handleWorkerMessage(event) {
@@ -6363,6 +6439,14 @@ function handleWorkerMessage(event) {
     aiSetStatus(msg.device === "webgpu" ? "Loading Alex with WebGPU…" : "Loading Alex with CPU/WASM…", "", true);
     return;
   }
+  if (msg.type === "backendAttempt") {
+    aiSetStatus(msg.device === "webgpu" ? "Trying WebGPU for Alex…" : "Trying CPU/WASM for Alex…", "", true);
+    return;
+  }
+  if (msg.type === "backendFallback") {
+    aiSetStatus("WebGPU could not start here. Switching Alex to CPU/WASM…", "", true);
+    return;
+  }
   if (msg.type === "ready") {
     workerReady = true;
     lastResolvedModel = msg.model;
@@ -6371,39 +6455,62 @@ function handleWorkerMessage(event) {
     setTimeout(()=>aiProgress.style.display="none",500);
     return;
   }
-  if (msg.type === "token" && msg.id === workerRequestId) {
-    if (!window.__alexStream) window.__alexStream = "";
-    window.__alexStream += msg.token || "";
-    aiResult.textContent = cleanAIOutput(window.__alexStream);
-    return;
-  }
 }
 
 async function loadMainThreadModel(model, statusPrefix="Loading Alex…") {
   if (localAIGenerator && lastResolvedModel === model) return localAIGenerator;
+
   if (localAILoading) {
     while (localAILoading) await new Promise(r=>setTimeout(r,70));
     if (localAIGenerator && lastResolvedModel === model) return localAIGenerator;
   }
+
   localAILoading = true;
   aiProgress.style.display = "block";
   aiProgress.value = 0;
+
+  let lastError = null;
+  const devices = navigator.gpu ? ["webgpu","wasm"] : ["wasm"];
+
   try {
-    const device = navigator.gpu ? "webgpu" : "wasm";
-    aiSetStatus(device === "webgpu" ? `${statusPrefix} with WebGPU…` : `${statusPrefix} with CPU/WASM…`, "", true);
-    localAIGenerator = await pipeline("text-generation", model, {
-      device,
-      dtype:"q4",
-      progress_callback:data=>{
-        if(typeof data.progress === "number") aiProgress.value=Math.max(0,Math.min(100,data.progress));
+    for (const device of devices) {
+      try {
+        aiSetStatus(
+          device === "webgpu" ? `${statusPrefix} with WebGPU…` : `${statusPrefix} with CPU/WASM…`,
+          "",
+          true
+        );
+
+        const candidate = await pipeline("text-generation", model, {
+          device,
+          dtype:"q4",
+          progress_callback:data=>{
+            if(typeof data?.progress === "number") {
+              aiProgress.value=Math.max(0,Math.min(100,data.progress));
+            }
+          }
+        });
+
+        localAIGenerator = candidate;
+        lastResolvedModel = model;
+        aiProgress.value=100;
+        aiSetStatus(`● Alex loaded and ready (${device === "webgpu" ? "WebGPU" : "WASM/CPU"}).`,"good");
+        setTimeout(()=>aiProgress.style.display="none",500);
+        return localAIGenerator;
+      } catch (error) {
+        lastError = error;
+        localAIGenerator = null;
+        if (device === "webgpu") {
+          aiSetStatus("WebGPU failed for Alex; automatically trying CPU/WASM…", "", true);
+          continue;
+        }
+        throw error;
       }
-    });
-    lastResolvedModel = model;
-    aiProgress.value=100;
-    aiSetStatus("● Alex loaded and ready.","good");
-    setTimeout(()=>aiProgress.style.display="none",500);
-    return localAIGenerator;
-  } finally { localAILoading=false; }
+    }
+    throw lastError || new Error("No supported AI backend is available.");
+  } finally {
+    localAILoading=false;
+  }
 }
 
 async function warmUpAlex() {
@@ -6412,7 +6519,7 @@ async function warmUpAlex() {
   try {
     const worker = createWorker();
     if (worker) {
-      worker.postMessage({type:"load",model:resolved.model});
+      worker.postMessage({type:"load", id:++workerRequestId, model:resolved.model});
       aiSetStatus("Alex is loading in the background…", "", true);
     } else {
       await loadMainThreadModel(resolved.model);
@@ -6425,44 +6532,97 @@ async function warmUpAlex() {
 async function generateWithWorker(messages, resolved, params) {
   const worker = createWorker();
   if (!worker) return null;
+
   const id = ++workerRequestId;
   window.__alexStream = "";
+
   return await new Promise((resolve,reject)=>{
     let finished=false;
+
+    const cleanup=()=>{
+      localAIWorker?.removeEventListener("message",onMessage);
+      localAIWorker?.removeEventListener("error",onWorkerError);
+    };
+
+    const finishReject=(error)=>{
+      if(finished)return;
+      finished=true;
+      cleanup();
+      reject(error);
+    };
+
+    const onWorkerError=(error)=>{
+      workerFailed=true;
+      finishReject(new Error("Alex background engine error. The app will retry without the worker."));
+    };
+
     const onMessage = event => {
       const msg=event.data||{};
-      if (msg.id !== id && msg.type !== "done" && msg.type !== "error") return;
-      if(msg.type === "token" && msg.id===id){
+      if(msg.id !== id) return;
+
+      if(msg.type === "token") {
         window.__alexStream += msg.token || "";
         aiResult.textContent=cleanAIOutput(window.__alexStream);
+        return;
       }
-      if(msg.type === "done" && msg.id===id){
+
+      if(msg.type === "done") {
         finished=true;
         cleanup();
         resolve(msg.text || window.__alexStream || "");
+        return;
       }
-      if(msg.type === "error" && msg.id===id){
-        finished=true;
-        cleanup();
-        reject(new Error(msg.error || "Alex worker error"));
+
+      if(msg.type === "error") {
+        workerFailed = true;
+        finishReject(new Error(msg.error || "Alex worker generation failed."));
       }
     };
-    const cleanup=()=>localAIWorker?.removeEventListener("message",onMessage);
+
     localAIWorker.addEventListener("message",onMessage);
-    worker.postMessage({type:"generate",id,model:resolved.model,messages,maxTokens:params.maxTokens,temperature:params.temperature,topP:params.topP,repetitionPenalty:params.repetitionPenalty});
-    setTimeout(()=>{if(!finished){cleanup();reject(new Error("Alex worker timed out."));}}, 180000);
+    localAIWorker.addEventListener("error",onWorkerError);
+
+    worker.postMessage({
+      type:"generate",
+      id,
+      model:resolved.model,
+      messages,
+      maxTokens:params.maxTokens,
+      temperature:params.temperature,
+      topP:params.topP,
+      repetitionPenalty:params.repetitionPenalty
+    });
+
+    setTimeout(()=>{
+      if(!finished) finishReject(new Error("Alex worker timed out."));
+    }, 180000);
   });
 }
 
 async function generateOnMain(messages, resolved, params) {
-  const ai = await loadMainThreadModel(resolved.model);
+  const ai = await loadMainThreadModel(resolved.model, "Loading Alex fallback…");
   let streamed="";
-  const streamer=new TextStreamer(ai.tokenizer,{skip_prompt:true,callback_function:token=>{streamed+=token;aiResult.textContent=cleanAIOutput(streamed);}});
-  const output=await ai(messages,{max_new_tokens:params.maxTokens,do_sample:true,temperature:params.temperature,top_p:params.topP,repetition_penalty:params.repetitionPenalty,streamer});
+  const streamer=new TextStreamer(ai.tokenizer,{
+    skip_prompt:true,
+    callback_function:token=>{
+      streamed+=token;
+      aiResult.textContent=cleanAIOutput(streamed);
+    }
+  });
+  const output=await ai(messages,{
+    max_new_tokens:params.maxTokens,
+    do_sample:true,
+    temperature:params.temperature,
+    top_p:params.topP,
+    repetition_penalty:params.repetitionPenalty,
+    streamer
+  });
   let text=streamed;
   const generated=output?.[0]?.generated_text;
-  if(Array.isArray(generated)){const last=generated[generated.length-1];if(last?.content) text=last.content;}
-  else if(typeof generated === "string") text=generated;
+  if(Array.isArray(generated)){
+    const last=generated[generated.length-1];
+    if(last?.content) text=last.content;
+  } else if(typeof generated === "string") text=generated;
   return text;
 }
 
