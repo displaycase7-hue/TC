@@ -730,6 +730,25 @@ header h1:after{content:"TChat";font-weight:800;letter-spacing:-.3px;position:ab
 .time{color:var(--muted)}
 .text{line-height:1.48;overflow-wrap:anywhere}
 .messageActions{display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap}
+
+.fileAttachment{margin-top:10px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--surface2);overflow:hidden}
+.fileAttachmentHeader{font-size:13px;font-weight:700;display:flex;gap:8px;align-items:center;overflow:hidden}
+.fileAttachmentHeader span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fileAttachmentMeta{font-size:12px;color:var(--muted);margin-top:4px}
+.fileAttachmentPreview{display:block;max-width:100%;max-height:420px;margin-top:10px;border-radius:10px;border:1px solid var(--line);background:#000;object-fit:contain}
+.fileAttachmentActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+.fileAttachmentActions a,.fileAttachmentActions button{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.fileDropZone{margin-top:10px;border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center;color:var(--muted);background:var(--surface2);transition:.15s ease}
+.fileDropZone.active{border-color:var(--accent);background:rgba(79,109,245,.08);color:var(--text)}
+.fileDropZone strong{display:block;color:var(--text);margin-bottom:3px}
+#globalFileDropOverlay{display:none;position:fixed;inset:0;z-index:39000;background:rgba(20,25,35,.78);align-items:center;justify-content:center;padding:20px;pointer-events:none}
+#globalFileDropOverlay.active{display:flex}
+#globalFileDropOverlayBox{width:min(620px,92vw);padding:36px 28px;border:3px dashed rgba(255,255,255,.9);border-radius:24px;text-align:center;color:#fff;background:rgba(30,36,50,.94);box-shadow:0 20px 70px rgba(0,0,0,.4)}
+#globalFileDropOverlayBox .dropIcon{font-size:52px;line-height:1;margin-bottom:12px}
+#globalFileDropOverlayBox h2{margin:0 0 8px;font-size:26px}
+#globalFileDropOverlayBox p{margin:0;color:#d7dce6}
+#shareEveryoneFile{background:var(--accent);color:#fff}
+#shareEveryoneFile:hover{background:var(--accent2)}
 .banButton{background:transparent!important;color:var(--danger)!important;border:1px solid #f0c7c3!important;padding:5px 8px!important}
 .reactionBar{display:flex;gap:4px;flex-wrap:wrap}
 .reactBtn{background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--line)!important;border-radius:999px!important;padding:4px 8px!important;font-size:12px!important;font-weight:600}
@@ -887,8 +906,6 @@ body.dark #toolsMenu button{color:var(--text)}
 @media(max-width:700px){.toolsGamesOverlay{padding:10px}.toolsGamesCard{padding:13px;border-radius:20px;max-height:94vh}.toolsGamesHeader h2{font-size:19px}.toolsTabs{padding-bottom:8px}.toolsTab{padding:8px 11px!important}#localAIRow{grid-template-columns:1fr}#localAIRow>*{width:100%;min-width:0}.megaSubControls{grid-template-columns:1fr}.toolboxWide{grid-column:auto}}
 </style>
 
-    <script type="text/javascript" src="tchat-browser-router.js"></script>
-
 </head>
 
 <body>
@@ -948,14 +965,27 @@ body.dark #toolsMenu button{color:var(--text)}
         <div id="fileShareRow">
             <input id="fileTarget" placeholder="Send file to name" maxlength="30">
             <button id="chooseFile">📎 Choose File</button>
-            <button id="sendFile" disabled>⬆️ Send File</button>
+            <button id="sendFile" disabled>⬆️ Send to Person</button>
+            <button id="shareEveryoneFile" disabled>🌐 Share to Everyone</button>
             <div id="selectedFile">No file selected</div>
             <input id="filePicker" type="file">
+        </div>
+        <div id="fileDropZone" class="fileDropZone" tabindex="0">
+            <strong>Drop a file here</strong>
+            Drag a file onto this box or anywhere in the chat to select it.
         </div>
         <div id="fileProgress">
             <progress id="fileProgressBar" value="0" max="100"></progress>
             <div id="fileProgressText">Preparing...</div>
         </div>
+    </div>
+</div>
+
+<div id="globalFileDropOverlay" aria-hidden="true">
+    <div id="globalFileDropOverlayBox">
+        <div class="dropIcon">📎</div>
+        <h2>Drop to share</h2>
+        <p>Release the file to open the sharing panel.</p>
     </div>
 </div>
 
@@ -2555,7 +2585,8 @@ function addMessage(
     name,
     text,
     time,
-    messageId
+    messageId,
+    attachment = null
 ) {
 
     if (isBanned(name))
@@ -2611,6 +2642,10 @@ function addMessage(
     box.appendChild(
         textElement
     );
+
+    if (attachment) {
+        appendFileAttachment(box, attachment);
+    }
 
     const actions =
         document.createElement("div");
@@ -4367,33 +4402,34 @@ window.addEventListener(
 
 /* ==================================================
    FILE SHARING — WEBRTC DATA CHANNEL
+
+   Targeted peer-to-peer sharing remains unchanged in concept.
+   Broadcast sharing creates one independent WebRTC connection
+   per online recipient, so no file is uploaded to a central server.
 ================================================== */
 
-let fileSocket = null;
-let filePC = null;
-let fileChannel = null;
-let fileRole = "";
-let fileTargetId = null;
 let selectedFile = null;
-let incomingFileMeta = null;
-let incomingFileParts = [];
-let incomingFileReceived = 0;
-let incomingFileWriter = null;
-let incomingFileHandle = null;
-let incomingFileFallbackParts = [];
+const fileSessions = new Map();
+const pendingIncomingFiles = new Map();
+const incomingFileQueue = [];
+let activeIncomingTransferId = null;
 
 const FILE_CHUNK_SIZE = 64 * 1024;
 const FILE_BUFFER_LIMIT = 4 * 1024 * 1024;
 
+const fileShare = document.getElementById("fileShare");
 const fileTarget = document.getElementById("fileTarget");
 const filePicker = document.getElementById("filePicker");
 const chooseFileButton = document.getElementById("chooseFile");
 const sendFileButton = document.getElementById("sendFile");
+const shareEveryoneFileButton = document.getElementById("shareEveryoneFile");
 const selectedFileLabel = document.getElementById("selectedFile");
 const fileProgress = document.getElementById("fileProgress");
 const fileProgressBar = document.getElementById("fileProgressBar");
 const fileProgressText = document.getElementById("fileProgressText");
 const fileTransferStatus = document.getElementById("fileTransferStatus");
+const fileDropZone = document.getElementById("fileDropZone");
+const globalFileDropOverlay = document.getElementById("globalFileDropOverlay");
 const incomingFile = document.getElementById("incomingFile");
 const incomingFileInfo = document.getElementById("incomingFileInfo");
 
@@ -4409,6 +4445,13 @@ function formatFileSize(bytes) {
     return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + " " + units[i];
 }
 
+function makeTransferId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
+    return "file-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+}
+
 function setFileStatus(text) {
     fileTransferStatus.textContent = text || "";
 }
@@ -4417,165 +4460,331 @@ function setFileProgress(done, total, text) {
     fileProgress.style.display = "block";
     const percent = total ? Math.min(100, (done / total) * 100) : 0;
     fileProgressBar.value = percent;
-    fileProgressText.textContent =
-        text || (formatFileSize(done) + " / " + formatFileSize(total));
+    fileProgressText.textContent = text || (formatFileSize(done) + " / " + formatFileSize(total));
 }
 
+function updateFileButtons() {
+    const hasFile = !!selectedFile;
+    sendFileButton.disabled = !hasFile;
+    shareEveryoneFileButton.disabled = !hasFile;
+}
+
+function selectFileForSharing(file, openPanel = true) {
+    if (!file) return;
+    selectedFile = file;
+    selectedFileLabel.textContent = file.name + " (" + formatFileSize(file.size) + ")";
+    setFileStatus("");
+    setFileProgress(0, file.size, "Ready to share " + file.name);
+    updateFileButtons();
+    if (openPanel) openFileSharePopup();
+}
 
 function openFileSharePopup() {
-    const panel = document.getElementById("fileShare");
-    if (!panel) return;
-    panel.classList.add("open");
-    panel.setAttribute("aria-hidden", "false");
+    if (!fileShare) return;
+    fileShare.classList.add("open");
+    fileShare.setAttribute("aria-hidden", "false");
     setTimeout(() => {
-        const target = document.getElementById("fileTarget");
-        if (target) target.focus();
+        if (!selectedFile) fileTarget?.focus();
     }, 0);
 }
 
 function closeFileSharePopup() {
-    const panel = document.getElementById("fileShare");
-    if (!panel) return;
-    panel.classList.remove("open");
-    panel.setAttribute("aria-hidden", "true");
+    if (!fileShare) return;
+    fileShare.classList.remove("open");
+    fileShare.setAttribute("aria-hidden", "true");
 }
 
 document.getElementById("fileShareToggle").addEventListener("click", openFileSharePopup);
 document.getElementById("fileShareClose").addEventListener("click", closeFileSharePopup);
-
 document.getElementById("fileShare").addEventListener("click", event => {
     if (event.target === event.currentTarget) closeFileSharePopup();
 });
-
 document.addEventListener("keydown", event => {
     if (event.key === "Escape") closeFileSharePopup();
 });
 
 chooseFileButton.onclick = () => filePicker.click();
-
 filePicker.onchange = () => {
-    selectedFile = filePicker.files && filePicker.files[0];
-    if (!selectedFile) {
-        selectedFileLabel.textContent = "No file selected";
-        sendFileButton.disabled = true;
-        return;
-    }
-    selectedFileLabel.textContent =
-        selectedFile.name + " (" + formatFileSize(selectedFile.size) + ")";
-    sendFileButton.disabled = false;
-    setFileStatus("");
+    const file = filePicker.files && filePicker.files[0];
+    if (file) selectFileForSharing(file, false);
 };
 
-function findOnlineUserByName(name) {
-    let result = null;
-    onlineUsers.forEach(user => {
-        if (normalizedName(user.name) === normalizedName(name)) {
-            result = user;
-        }
+["dragenter", "dragover"].forEach(type => {
+    fileDropZone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        fileDropZone.classList.add("active");
     });
-    return result;
+});
+["dragleave", "drop"].forEach(type => {
+    fileDropZone.addEventListener(type, event => {
+        event.preventDefault();
+        event.stopPropagation();
+        fileDropZone.classList.remove("active");
+    });
+});
+fileDropZone.addEventListener("drop", event => {
+    const file = event.dataTransfer?.files?.[0];
+    if (file) selectFileForSharing(file, true);
+});
+
+let globalDragDepth = 0;
+function hasDraggedFiles(event) {
+    const types = event.dataTransfer?.types;
+    return !!types && Array.from(types).includes("Files");
 }
 
-function closeFilePeer() {
-    try { fileChannel?.close(); } catch {}
-    try { filePC?.close(); } catch {}
-    try { fileSocket?.close(); } catch {}
-    fileChannel = null;
-    filePC = null;
-    fileSocket = null;
-    fileTargetId = null;
-    fileRole = "";
+window.addEventListener("dragenter", event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    globalDragDepth++;
+    globalFileDropOverlay.classList.add("active");
+});
+window.addEventListener("dragover", event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+});
+window.addEventListener("dragleave", event => {
+    if (!hasDraggedFiles(event)) return;
+    globalDragDepth = Math.max(0, globalDragDepth - 1);
+    if (!globalDragDepth) globalFileDropOverlay.classList.remove("active");
+});
+window.addEventListener("drop", event => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    globalDragDepth = 0;
+    globalFileDropOverlay.classList.remove("active");
+    if (event.target && (event.target === fileDropZone || fileDropZone.contains(event.target))) return;
+    const file = event.dataTransfer?.files?.[0];
+    if (file) selectFileForSharing(file, true);
+});
+
+document.addEventListener("paste", event => {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.kind === "file") {
+            const file = item.getAsFile();
+            if (file) {
+                selectFileForSharing(file, true);
+                break;
+            }
+        }
+    }
+});
+
+function getOnlineFileRecipients() {
+    return Array.from(onlineUsers.values()).filter(user => user && user.id && user.id !== myId);
 }
 
-function setupFilePeer(targetId, targetName, initiator) {
-    closeFilePeer();
+function addFileAttachment(box, attachment) {
+    const wrap = document.createElement("div");
+    wrap.className = "fileAttachment";
+    wrap.dataset.transferId = attachment.transferId || "";
 
-    fileTargetId = targetId;
-    fileRole = initiator ? "sender" : "receiver";
+    const header = document.createElement("div");
+    header.className = "fileAttachmentHeader";
+    const icon = document.createElement("span");
+    icon.textContent = attachment.mime && attachment.mime.indexOf("image/") === 0 ? "🖼️" : "📎";
+    const fileName = document.createElement("span");
+    fileName.textContent = attachment.name || "Shared file";
+    header.append(icon, fileName);
+    wrap.appendChild(header);
 
-    filePC = new RTCPeerConnection(rtcConfig);
+    const meta = document.createElement("div");
+    meta.className = "fileAttachmentMeta";
+    meta.textContent = (attachment.mime || "File") + " • " + formatFileSize(attachment.size || 0);
+    wrap.appendChild(meta);
 
-    filePC.onicecandidate = event => {
-        if (event.candidate) {
+    if (attachment.objectUrl && attachment.mime && attachment.mime.indexOf("image/") === 0) {
+        const img = document.createElement("img");
+        img.className = "fileAttachmentPreview";
+        img.src = attachment.objectUrl;
+        img.alt = attachment.name || "Shared image";
+        wrap.appendChild(img);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "fileAttachmentActions";
+
+    if (attachment.objectUrl) {
+        const open = document.createElement("a");
+        open.href = attachment.objectUrl;
+        open.target = "_blank";
+        open.rel = "noopener";
+        open.textContent = "Open";
+        actions.appendChild(open);
+
+        const download = document.createElement("a");
+        download.href = attachment.objectUrl;
+        download.download = attachment.name || "download";
+        download.textContent = "Download";
+        actions.appendChild(download);
+    }
+
+    if (actions.children.length) wrap.appendChild(actions);
+    box.appendChild(wrap);
+}
+
+function addFileMessage(name, attachment, text = "") {
+    const id = "file-msg-" + (attachment.transferId || makeTransferId());
+    const transferId = attachment.transferId || "";
+    if (transferId) {
+        const existingMessages = document.querySelectorAll(".fileAttachment");
+        for (const existingWrap of existingMessages) {
+            if (existingWrap.dataset.transferId === transferId) return;
+        }
+    }
+
+    const box = document.createElement("div");
+    box.className = "message";
+    box.dataset.username = normalizedName(name);
+    box.dataset.messageId = id;
+
+    const nameElement = document.createElement("div");
+    nameElement.className = "name";
+    nameElement.textContent = name;
+    const timeElement = document.createElement("span");
+    timeElement.className = "time";
+    const now = new Date();
+    timeElement.textContent = now.getHours().toString().padStart(2, "0") + ":" + now.getMinutes().toString().padStart(2, "0");
+    nameElement.appendChild(timeElement);
+    box.appendChild(nameElement);
+
+    const textElement = document.createElement("div");
+    textElement.className = "text";
+    textElement.textContent = text;
+    box.appendChild(textElement);
+
+    const attachmentWrap = document.createElement("div");
+    addFileAttachment(attachmentWrap, attachment);
+    if (attachmentWrap.firstChild) {
+        const actual = attachmentWrap.firstChild;
+        actual.setAttribute("data-file-transfer-id", attachment.transferId || "");
+        box.appendChild(actual);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "messageActions";
+    const reactionBar = document.createElement("div");
+    reactionBar.className = "reactionBar";
+    ["👍","❤️","😂","🎉","😮"].forEach(emoji => {
+        const b = document.createElement("button");
+        b.className = "reactBtn";
+        b.dataset.emoji = emoji;
+        b.textContent = emoji + " 0";
+        b.onclick = () => toggleReaction(box.dataset.messageId, emoji, b);
+        reactionBar.appendChild(b);
+    });
+    actions.appendChild(reactionBar);
+    box.appendChild(actions);
+    document.getElementById("chat").appendChild(box);
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+}
+
+function closeFileSession(session) {
+    try { session.channel?.close(); } catch {}
+    try { session.pc?.close(); } catch {}
+    fileSessions.delete(session.transferId);
+}
+
+function updateSessionProgress(session, done, total, label) {
+    session.done = done;
+    session.total = total;
+    session.progressLabel = label || "";
+    if (session.isBroadcast) {
+        const all = Array.from(fileSessions.values()).filter(s => s.isBroadcast && s.file === selectedFile);
+        const completed = all.filter(s => s.status === "complete").length;
+        const recipients = all.length;
+        setFileProgress(done, total, label || (completed + " / " + recipients + " recipients"));
+    } else {
+        setFileProgress(done, total, label);
+    }
+}
+
+function setupFileSession(session, initiator) {
+    const pc = new RTCPeerConnection(rtcConfig);
+    session.pc = pc;
+    fileSessions.set(session.transferId, session);
+
+    pc.onicecandidate = event => {
+        if (!event.candidate) return;
+        try {
             chat.send({
                 type: "fileIce",
-                toId: targetId,
+                transferId: session.transferId,
+                toId: session.targetId,
                 fromId: myId,
                 candidate: event.candidate
             });
-        }
+        } catch {}
     };
 
-    filePC.onconnectionstatechange = () => {
-        if (!filePC) return;
-        if (filePC.connectionState === "failed") {
-            setFileStatus("❌ File connection failed.");
-            closeFilePeer();
+    pc.onconnectionstatechange = () => {
+        if (!session.pc) return;
+        if (["failed", "closed"].includes(pc.connectionState) && session.status !== "complete") {
+            session.status = "failed";
+            setFileStatus("❌ File connection to " + session.targetName + " failed.");
+            closeFileSession(session);
         }
     };
 
     if (initiator) {
-        fileChannel = filePC.createDataChannel("file", {
-            ordered: true
-        });
-        setupFileChannel(fileChannel, targetName);
-
-        (async () => {
-            const offer = await filePC.createOffer();
-            await filePC.setLocalDescription(offer);
+        const channel = pc.createDataChannel("file", { ordered: true });
+        session.channel = channel;
+        setupFileChannel(session, channel);
+        pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
             chat.send({
                 type: "fileOffer",
-                toId: targetId,
+                transferId: session.transferId,
+                toId: session.targetId,
                 fromId: myId,
                 fromName: nameBox.value.trim(),
-                offer: filePC.localDescription
+                offer: pc.localDescription
             });
-        })().catch(error => {
+        }).catch(error => {
             console.error(error);
-            setFileStatus("❌ Could not start file transfer.");
-            closeFilePeer();
+            session.status = "failed";
+            setFileStatus("❌ Could not start file transfer to " + session.targetName + ".");
+            closeFileSession(session);
         });
     } else {
-        filePC.ondatachannel = event => {
-            fileChannel = event.channel;
-            setupFileChannel(fileChannel, targetName);
+        pc.ondatachannel = event => {
+            session.channel = event.channel;
+            setupFileChannel(session, event.channel);
         };
     }
 }
 
-function setupFileChannel(channel, targetName) {
+function setupFileChannel(session, channel) {
     channel.binaryType = "arraybuffer";
-
     channel.onopen = () => {
-        if (fileRole === "sender") {
-            setFileStatus("🟢 Connected. Waiting for receiver to choose a save location...");
-        } else {
-            setFileStatus("🟢 Connected. Choose where to save the file.");
+        if (session.role === "sender") {
+            setFileStatus("🟢 Connected to " + session.targetName + ". Waiting for receiver...");
+        } else if (session.accepted) {
+            try { channel.send(JSON.stringify({ type: "fileReady" })); } catch {}
         }
     };
-
     channel.onclose = () => {
-        if (fileRole === "sender") {
-            setFileStatus("File connection closed.");
+        if (session.status !== "complete" && session.role === "sender") {
+            setFileStatus("File connection to " + session.targetName + " closed.");
         }
     };
-
     channel.onerror = error => {
         console.error("File data channel error:", error);
-        setFileStatus("❌ File transfer error.");
+        setFileStatus("❌ File transfer error with " + session.targetName + ".");
     };
-
-    channel.onmessage = event => {
-        handleIncomingFileData(event.data);
-    };
+    channel.onmessage = event => handleIncomingFileData(session, event.data);
 }
 
-async function sendSelectedFile() {
-    const file = selectedFile;
-    if (!file || !fileChannel || fileChannel.readyState !== "open") return;
+async function sendFileSession(session) {
+    const file = session.file;
+    const channel = session.channel;
+    if (!file || !channel || channel.readyState !== "open") return;
 
+    session.status = "sending";
     try {
-        fileChannel.send(JSON.stringify({
+        channel.send(JSON.stringify({
             type: "fileMeta",
             name: file.name,
             size: file.size,
@@ -4584,334 +4793,345 @@ async function sendSelectedFile() {
         }));
 
         let offset = 0;
-        setFileProgress(0, file.size, "Starting " + file.name + "...");
-
         while (offset < file.size) {
-            if (!fileChannel || fileChannel.readyState !== "open") {
-                throw new Error("Connection closed");
-            }
-
-            while (fileChannel.bufferedAmount > FILE_BUFFER_LIMIT) {
+            while (channel.bufferedAmount > FILE_BUFFER_LIMIT) {
                 await new Promise(resolve => setTimeout(resolve, 25));
             }
-
+            if (channel.readyState !== "open") throw new Error("Connection closed");
             const end = Math.min(offset + FILE_CHUNK_SIZE, file.size);
             const buffer = await file.slice(offset, end).arrayBuffer();
-            fileChannel.send(buffer);
+            channel.send(buffer);
             offset = end;
-
-            setFileProgress(
+            updateSessionProgress(
+                session,
                 offset,
                 file.size,
-                "Sending " + file.name + " — " +
-                Math.round((offset / file.size) * 100) + "%"
+                session.isBroadcast
+                    ? "Sending " + file.name + " to " + session.targetName + " — " + Math.round((offset / file.size) * 100) + "%"
+                    : "Sending " + file.name + " — " + Math.round((offset / file.size) * 100) + "%"
             );
-
             await new Promise(resolve => setTimeout(resolve, 0));
         }
 
-        fileChannel.send(JSON.stringify({ type: "fileDone" }));
-        setFileProgress(file.size, file.size, "✅ Sent " + file.name);
-        setFileStatus("✅ File sent to " + (fileTarget.value.trim() || "user") + ".");
-        sendFileButton.disabled = false;
+        channel.send(JSON.stringify({ type: "fileDone" }));
+        session.status = "complete";
+        if (!session.isBroadcast) {
+            setFileProgress(file.size, file.size, "✅ Sent " + file.name);
+            setFileStatus("✅ File sent to " + session.targetName + ".");
+        }
+        setTimeout(() => closeFileSession(session), 2500);
     } catch (error) {
         console.error(error);
-        setFileStatus("❌ File transfer stopped.");
-        setFileProgress(0, file?.size || 0, "Transfer stopped");
-    } finally {
-        selectedFile = null;
-        filePicker.value = "";
-        selectedFileLabel.textContent = "No file selected";
-        sendFileButton.disabled = true;
-        setTimeout(() => closeFilePeer(), 1500);
+        session.status = "failed";
+        setFileStatus("❌ File transfer to " + session.targetName + " stopped.");
+        closeFileSession(session);
     }
 }
 
-async function prepareIncomingFile() {
-    if (!incomingFileMeta) return;
-
-    incomingFileParts = [];
-    incomingFileFallbackParts = [];
-    incomingFileReceived = 0;
-    incomingFileWriter = null;
-    incomingFileHandle = null;
+async function prepareIncomingFile(session) {
+    const meta = session.incomingMeta;
+    if (!meta) return;
+    session.incomingParts = [];
+    session.incomingReceived = 0;
 
     try {
-        if ("showSaveFilePicker" in window) {
-            incomingFileHandle = await window.showSaveFilePicker({
-                suggestedName: incomingFileMeta.name,
+        const isImage = String(meta.mime || "").indexOf("image/") === 0;
+        if (!isImage && "showSaveFilePicker" in window) {
+            session.incomingHandle = await window.showSaveFilePicker({
+                suggestedName: meta.name,
                 types: [{
                     description: "Received file",
-                    accept: {
-                        [incomingFileMeta.mime || "application/octet-stream"]: [
-                            "." + (incomingFileMeta.name.split(".").pop() || "bin")
-                        ]
-                    }
+                    accept: { [meta.mime || "application/octet-stream"]: ["." + (meta.name.split(".").pop() || "bin")] }
                 }]
             });
-            incomingFileWriter = await incomingFileHandle.createWritable();
-        } else {
-            incomingFileWriter = null;
+            session.incomingWriter = await session.incomingHandle.createWritable();
         }
     } catch (error) {
-        if (error && error.name === "AbortError") {
-            setFileStatus("File save cancelled.");
-        } else {
-            console.error(error);
-            setFileStatus("Could not open the save location.");
-        }
-        incomingFileMeta = null;
-        incomingFile.style.display = "none";
+        if (error?.name === "AbortError") setFileStatus("File save cancelled.");
+        else setFileStatus("Could not open the save location.");
+        try { session.channel?.send(JSON.stringify({ type: "fileDeclined" })); } catch {}
+        closeFileSession(session);
+        pendingIncomingFiles.delete(session.transferId);
         return;
     }
 
+    session.accepted = true;
+    session.status = "receiving";
+    pendingIncomingFiles.delete(session.transferId);
     incomingFile.style.display = "none";
-    setFileProgress(0, incomingFileMeta.size, "Receiving " + incomingFileMeta.name + "...");
-
-    if (!filePC) {
-        setFileStatus("❌ File connection disappeared.");
-        return;
+    activeIncomingTransferId = null;
+    setFileProgress(0, meta.size, "Receiving " + meta.name + "...");
+    setFileStatus("🟢 Receiving " + meta.name + " from " + session.targetName + "...");
+    if (session.channel?.readyState === "open") {
+        try { session.channel.send(JSON.stringify({ type: "fileReady" })); } catch {}
     }
-    setFileStatus("🟢 Receiving " + incomingFileMeta.name + "...");
-    try {
-        fileChannel?.send(JSON.stringify({ type: "fileReady" }));
-    } catch {}
+    showNextIncomingFileRequest();
 }
 
-function showIncomingFile(meta, fromName) {
-    incomingFileMeta = meta;
+function queueIncomingFileRequest(session) {
+    pendingIncomingFiles.set(session.transferId, session);
+    incomingFileQueue.push(session.transferId);
+    showNextIncomingFileRequest();
+}
+
+function showNextIncomingFileRequest() {
+    if (activeIncomingTransferId || !incomingFileQueue.length) return;
+    const id = incomingFileQueue.shift();
+    const session = pendingIncomingFiles.get(id);
+    if (!session) return showNextIncomingFileRequest();
+    activeIncomingTransferId = id;
     incomingFileInfo.textContent =
-        (fromName || "Someone") + " wants to send you " +
-        meta.name + " (" + formatFileSize(meta.size) + "). " +
-        "Click Save File to choose where it goes.";
+        session.targetName + " wants to send you " + session.incomingMeta.name +
+        " (" + formatFileSize(session.incomingMeta.size) + "). Choose Save File to receive it.";
     incomingFile.style.display = "flex";
 }
 
 document.getElementById("acceptFile").onclick = () => {
-    prepareIncomingFile();
+    const session = activeIncomingTransferId ? pendingIncomingFiles.get(activeIncomingTransferId) : null;
+    if (session) prepareIncomingFile(session);
 };
 
 document.getElementById("declineFile").onclick = () => {
+    const session = activeIncomingTransferId ? pendingIncomingFiles.get(activeIncomingTransferId) : null;
     incomingFile.style.display = "none";
-    incomingFileMeta = null;
+    activeIncomingTransferId = null;
+    if (session) {
+        pendingIncomingFiles.delete(session.transferId);
+        try { session.channel?.send(JSON.stringify({ type: "fileDeclined" })); } catch {}
+        closeFileSession(session);
+    }
     setFileStatus("File declined.");
-    try {
-        fileChannel?.send(JSON.stringify({ type: "fileDeclined" }));
-    } catch {}
-    closeFilePeer();
+    showNextIncomingFileRequest();
 };
 
-async function handleIncomingFileData(data) {
+async function handleIncomingFileData(session, data) {
     if (typeof data === "string") {
         let packet;
         try { packet = JSON.parse(data); } catch { return; }
 
         if (packet.type === "fileReady") {
-            if (fileRole === "sender") {
-                setFileStatus("🟢 Receiver is ready. Sending...");
-                sendSelectedFile();
-            }
+            if (session.role === "sender") sendFileSession(session);
             return;
         }
 
         if (packet.type === "fileMeta") {
-            incomingFileMeta = packet;
-            incomingFileParts = [];
-            incomingFileFallbackParts = [];
-            incomingFileReceived = 0;
-            showIncomingFile(packet, packet.fromName || "A user");
+            session.incomingMeta = packet;
+            session.incomingParts = [];
+            session.incomingFallbackParts = [];
+            session.incomingReceived = 0;
+            queueIncomingFileRequest(session);
             return;
         }
 
         if (packet.type === "fileDone") {
             try {
-                if (incomingFileWriter) {
-                    await incomingFileWriter.close();
-                    incomingFileWriter = null;
-                    setFileProgress(
-                        incomingFileMeta.size,
-                        incomingFileMeta.size,
-                        "✅ Saved " + incomingFileMeta.name
-                    );
-                } else {
-                    const blob = new Blob(
-                        incomingFileFallbackParts,
-                        { type: incomingFileMeta.mime || "application/octet-stream" }
-                    );
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url;
-                    a.download = incomingFileMeta.name;
-                    a.textContent = "Download " + incomingFileMeta.name;
-                    a.style.display = "none";
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                    setFileProgress(
-                        incomingFileMeta.size,
-                        incomingFileMeta.size,
-                        "✅ Received " + incomingFileMeta.name
-                    );
-                    setFileStatus("The received file download has started.");
-                    setTimeout(() => URL.revokeObjectURL(url), 60000);
+                if (session.incomingWriter) {
+                    await session.incomingWriter.close();
+                    session.incomingWriter = null;
                 }
+
+                const isImage = String(session.incomingMeta.mime || "").indexOf("image/") === 0;
+                if (isImage || !session.incomingHandle) {
+                    const blob = new Blob(session.incomingFallbackParts || [], { type: session.incomingMeta.mime || "application/octet-stream" });
+                    session.receivedObjectUrl = URL.createObjectURL(blob);
+                    addFileMessage(session.targetName, {
+                        transferId: session.transferId,
+                        name: session.incomingMeta.name,
+                        size: session.incomingMeta.size,
+                        mime: session.incomingMeta.mime,
+                        objectUrl: session.receivedObjectUrl
+                    }, "📎 File received");
+                } else {
+                    addFileMessage(session.targetName, {
+                        transferId: session.transferId,
+                        name: session.incomingMeta.name,
+                        size: session.incomingMeta.size,
+                        mime: session.incomingMeta.mime
+                    }, "📎 File received and saved");
+                }
+                session.status = "complete";
+                setFileProgress(session.incomingMeta.size, session.incomingMeta.size, "✅ Received " + session.incomingMeta.name);
+                setFileStatus("✅ Received " + session.incomingMeta.name + " from " + session.targetName + ".");
             } catch (error) {
                 console.error(error);
                 setFileStatus("❌ Could not finish saving the file.");
             }
-
-            incomingFileParts = [];
-            incomingFileFallbackParts = [];
-            incomingFileMeta = null;
-            setTimeout(() => closeFilePeer(), 1500);
+            setTimeout(() => closeFileSession(session), 2500);
             return;
         }
 
         if (packet.type === "fileDeclined") {
-            setFileStatus("The receiver declined the file.");
-            closeFilePeer();
+            session.status = "declined";
+            setFileStatus(session.targetName + " declined the file.");
+            closeFileSession(session);
             return;
         }
-
         return;
     }
 
-    if (!incomingFileMeta) return;
-
+    if (!session.incomingMeta || !session.accepted) return;
     try {
-        const chunk = data instanceof ArrayBuffer
-            ? new Uint8Array(data)
-            : new Uint8Array(await data.arrayBuffer());
-
-        if (incomingFileWriter) {
-            await incomingFileWriter.write(chunk);
-        } else {
-            incomingFileFallbackParts.push(chunk);
-        }
-
-        incomingFileReceived += chunk.byteLength;
-
+        const chunk = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(await data.arrayBuffer());
+        if (session.incomingWriter) await session.incomingWriter.write(chunk);
+        else session.incomingFallbackParts.push(chunk);
+        session.incomingReceived += chunk.byteLength;
         setFileProgress(
-            incomingFileReceived,
-            incomingFileMeta.size,
-            "Receiving " + incomingFileMeta.name + " — " +
-            Math.round((incomingFileReceived / incomingFileMeta.size) * 100) + "%"
+            session.incomingReceived,
+            session.incomingMeta.size,
+            "Receiving " + session.incomingMeta.name + " — " + Math.round((session.incomingReceived / session.incomingMeta.size) * 100) + "%"
         );
     } catch (error) {
         console.error(error);
+        try { session.incomingWriter?.abort(); } catch {}
         setFileStatus("❌ Could not write received file.");
-        try { incomingFileWriter?.abort(); } catch {}
-        closeFilePeer();
+        closeFileSession(session);
     }
 }
 
-sendFileButton.onclick = () => {
-    if (!selectedFile) return;
-
-    const senderName = nameBox.value.trim();
-    const targetName = fileTarget.value.trim();
-
-    if (!senderName) {
-        alert("Enter your name first.");
-        nameBox.focus();
-        return;
-    }
-
-    if (!targetName) {
-        alert("Enter the name of the person to send the file to.");
-        fileTarget.focus();
-        return;
-    }
-
-    if (checkCurrentNameBan()) return;
-
-    const targetUser = findOnlineUserByName(targetName);
-
-    if (!targetUser) {
-        alert(targetName + " is not currently connected to this room.");
-        return;
-    }
-
-    if (targetUser.id === myId) {
-        alert("You cannot send a file to yourself.");
-        return;
-    }
-
-    const fileToSend = selectedFile;
-    setFileProgress(0, fileToSend.size, "Connecting...");
-    setFileStatus("Connecting to " + targetUser.name + "...");
-
+function buildSenderSession(file, targetUser, isBroadcast) {
+    const session = {
+        transferId: makeTransferId(),
+        targetId: targetUser.id,
+        targetName: targetUser.name,
+        role: "sender",
+        file,
+        isBroadcast: !!isBroadcast,
+        status: "connecting"
+    };
+    setupFileSession(session, true);
     chat.send({
         type: "fileRequest",
+        transferId: session.transferId,
         fromId: myId,
-        fromName: senderName,
+        fromName: nameBox.value.trim(),
         toId: targetUser.id,
         toName: targetUser.name,
-        fileName: fileToSend.name,
-        fileSize: fileToSend.size,
-        fileMime: fileToSend.type || "application/octet-stream"
+        broadcast: !!isBroadcast,
+        fileName: file.name,
+        fileSize: file.size,
+        fileMime: file.type || "application/octet-stream"
     });
+    return session;
+}
 
-    sendFileButton.disabled = true;
-    setupFilePeer(targetUser.id, targetUser.name, true);
-};
+function sendSelectedFileToPerson() {
+    if (!selectedFile) return;
+    const senderName = nameBox.value.trim();
+    const targetName = fileTarget.value.trim();
+    if (!senderName) { alert("Enter your name first."); nameBox.focus(); return; }
+    if (!targetName) { alert("Enter the name of the person to send the file to."); fileTarget.focus(); return; }
+    if (checkCurrentNameBan()) return;
+    const targetUser = findOnlineUserByName(targetName);
+    if (!targetUser) { alert(targetName + " is not currently connected to this room."); return; }
+    if (targetUser.id === myId) { alert("You cannot send a file to yourself."); return; }
+
+    const file = selectedFile;
+    setFileProgress(0, file.size, "Connecting to " + targetUser.name + "...");
+    setFileStatus("Connecting to " + targetUser.name + "...");
+    buildSenderSession(file, targetUser, false);
+    addFileMessage(senderName, {
+        transferId: "local-" + makeTransferId(),
+        name: file.name,
+        size: file.size,
+        mime: file.type || "application/octet-stream",
+        objectUrl: URL.createObjectURL(file)
+    }, "📎 Sending file to " + targetUser.name);
+    selectedFile = null;
+    filePicker.value = "";
+    selectedFileLabel.textContent = "No file selected";
+    updateFileButtons();
+}
+
+function shareSelectedFileToEveryone() {
+    if (!selectedFile) return;
+    const senderName = nameBox.value.trim();
+    if (!senderName) { alert("Enter your name first."); nameBox.focus(); return; }
+    if (checkCurrentNameBan()) return;
+
+    const recipients = getOnlineFileRecipients();
+    if (!recipients.length) { alert("There is nobody else currently connected to this room."); return; }
+
+    const file = selectedFile;
+    setFileStatus("Starting " + file.name + " for " + recipients.length + " recipients...");
+    setFileProgress(0, file.size, "Preparing " + file.name + " for everyone...");
+
+    recipients.forEach(user => buildSenderSession(file, user, true));
+    addFileMessage(senderName, {
+        transferId: "broadcast-" + makeTransferId(),
+        name: file.name,
+        size: file.size,
+        mime: file.type || "application/octet-stream",
+        objectUrl: URL.createObjectURL(file)
+    }, "🌐 Shared with everyone in the room");
+
+    selectedFile = null;
+    filePicker.value = "";
+    selectedFileLabel.textContent = "No file selected";
+    updateFileButtons();
+}
+
+sendFileButton.onclick = sendSelectedFileToPerson;
+shareEveryoneFileButton.onclick = shareSelectedFileToEveryone;
 
 function handleFileSignal(message) {
     if (!message || message.fromId === myId) return;
 
     if (message.type === "fileRequest" && message.toId === myId) {
-        incomingFileMeta = {
-            name: message.fileName,
-            size: message.fileSize,
-            mime: message.fileMime || "application/octet-stream"
+        const transferId = message.transferId || makeTransferId();
+        const session = {
+            transferId,
+            targetId: message.fromId,
+            targetName: message.fromName || "A user",
+            role: "receiver",
+            status: "connecting",
+            accepted: false,
+            incomingFallbackParts: [],
+            incomingMeta: {
+                name: message.fileName,
+                size: message.fileSize,
+                mime: message.fileMime || "application/octet-stream"
+            }
         };
-        showIncomingFile(incomingFileMeta, message.fromName);
-        setupFilePeer(message.fromId, message.fromName, false);
-
+        fileSessions.set(transferId, session);
+        setupFileSession(session, false);
+        queueIncomingFileRequest(session);
         return;
     }
 
-    if (message.toId !== myId) return;
+    const session = message.transferId ? fileSessions.get(message.transferId) : null;
+    if (!session || message.toId !== myId) return;
 
     if (message.type === "fileOffer") {
-        if (!filePC) setupFilePeer(message.fromId, message.fromName || "sender", false);
-
         (async () => {
             try {
-                await filePC.setRemoteDescription(
-                    new RTCSessionDescription(message.offer)
-                );
-                const answer = await filePC.createAnswer();
-                await filePC.setLocalDescription(answer);
+                await session.pc.setRemoteDescription(new RTCSessionDescription(message.offer));
+                const answer = await session.pc.createAnswer();
+                await session.pc.setLocalDescription(answer);
                 chat.send({
                     type: "fileAnswer",
+                    transferId: session.transferId,
                     toId: message.fromId,
                     fromId: myId,
-                    answer: filePC.localDescription
+                    answer: session.pc.localDescription
                 });
             } catch (error) {
                 console.error(error);
                 setFileStatus("❌ Could not accept the file connection.");
-                closeFilePeer();
+                closeFileSession(session);
             }
         })();
         return;
     }
 
-    if (message.type === "fileAnswer" && filePC) {
-        filePC.setRemoteDescription(
-            new RTCSessionDescription(message.answer)
-        ).catch(error => console.error(error));
+    if (message.type === "fileAnswer") {
+        session.pc?.setRemoteDescription(new RTCSessionDescription(message.answer)).catch(error => console.error(error));
         return;
     }
 
-    if (message.type === "fileIce" && filePC) {
-        filePC.addIceCandidate(
-            new RTCIceCandidate(message.candidate)
-        ).catch(error => console.error("File ICE error:", error));
+    if (message.type === "fileIce") {
+        session.pc?.addIceCandidate(new RTCIceCandidate(message.candidate)).catch(error => console.error("File ICE error:", error));
     }
 }
-
 
 /* ==================================================
    RECEIVE CHAT / PRESENCE / VIDEO / BOARD
