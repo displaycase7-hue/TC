@@ -741,34 +741,6 @@ header h1:after{content:"TChat";font-weight:800;letter-spacing:-.3px;position:ab
 .fileDropZone{margin-top:10px;border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center;color:var(--muted);background:var(--surface2);transition:.15s ease}
 .fileDropZone.active{border-color:var(--accent);background:rgba(79,109,245,.08);color:var(--text)}
 .fileDropZone strong{display:block;color:var(--text);margin-bottom:3px}
-.fileShareHint{margin-top:2px;flex-basis:100%;font-size:12px;line-height:1.45;color:var(--muted);text-align:center}
-#incomingFile{
-    position:fixed;
-    inset:0;
-    z-index:53000;
-    align-items:center;
-    justify-content:center;
-    padding:24px;
-    box-sizing:border-box;
-    background:rgba(8,14,25,.58);
-}
-#incomingFileBox{
-    width:min(520px, calc(100vw - 48px));
-    max-width:520px;
-    box-sizing:border-box;
-    background:var(--surface);
-    color:var(--text);
-    border:1px solid var(--line);
-    border-radius:20px;
-    padding:20px;
-    box-shadow:0 24px 80px rgba(0,0,0,.28);
-    text-align:center;
-}
-#incomingFileBox h2{margin:0 0 10px}
-#incomingFileInfo{margin:0;color:var(--muted);line-height:1.5}
-#incomingFileButtons{display:flex;gap:10px;margin-top:18px}
-#incomingFileButtons button{flex:1}
-#declineFile{background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--line)!important}
 #globalFileDropOverlay{display:none;position:fixed;inset:0;z-index:39000;background:rgba(20,25,35,.78);align-items:center;justify-content:center;padding:20px;pointer-events:none}
 #globalFileDropOverlay.active{display:flex}
 #globalFileDropOverlayBox{width:min(620px,92vw);padding:36px 28px;border:3px dashed rgba(255,255,255,.9);border-radius:24px;text-align:center;color:#fff;background:rgba(30,36,50,.94);box-shadow:0 20px 70px rgba(0,0,0,.4)}
@@ -792,23 +764,8 @@ button:hover{background:var(--accent2)}
 #onlineUsers{max-width:850px;padding:0 14px;margin:8px auto}
 #onlineUsersTitle{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .userPill{background:var(--surface);border:1px solid var(--line)}
-#fileShare{
-    width:100vw;
-    max-width:none;
-    box-sizing:border-box;
-    padding:24px;
-    background:rgba(8,14,25,.58);
-    left:0; right:0; top:0; bottom:0;
-}
-#fileShareBox{
-    width:min(620px, calc(100vw - 48px));
-    max-width:620px;
-    max-height:min(88vh,760px);
-    margin:0 auto;
-    background:var(--surface);
-    border:1px solid var(--line);
-    box-shadow:0 24px 80px rgba(0,0,0,.28);
-}
+#fileShare{max-width:850px;padding:0 14px}
+#fileShareBox{background:var(--surface);border:1px solid var(--line);box-shadow:none}
 /* hide the old one-to-one target from the main composer; the feature remains available to receive calls */
 #videoTarget,#videoRequestButton{display:none!important}
 #form:after{content:""}
@@ -1010,7 +967,6 @@ body.dark #toolsMenu button{color:var(--text)}
             <button id="chooseFile">📎 Choose File</button>
             <button id="sendFile" disabled>⬆️ Send to Person</button>
             <button id="shareEveryoneFile" disabled>🌐 Share to Everyone</button>
-            <div class="fileShareHint">Sharing to everyone sends a peer-to-peer copy to each person automatically. Single-person transfers still require their approval.</div>
             <div id="selectedFile">No file selected</div>
             <input id="filePicker" type="file">
         </div>
@@ -1334,6 +1290,14 @@ body.dark #toolsMenu button{color:var(--text)}
     <span id="groupCallStatus">Connecting…</span>
   </div>
   <div id="groupCallGrid"></div>
+  <section id="groupCallChatPanel" aria-label="Group call chat">
+    <div id="groupCallChatHeader"><span>💬 Call Chat</span><button id="groupCallChatClose" type="button" aria-label="Close call chat">✕</button></div>
+    <div id="groupCallChatMessages" aria-live="polite"></div>
+    <form id="groupCallChatForm">
+      <textarea id="groupCallChatInput" rows="2" maxlength="2000" placeholder="Message the people in the call…"></textarea>
+      <button id="groupCallChatSend" type="submit">Send</button>
+    </form>
+  </section>
   <div id="groupCallControls">
     <button id="groupMute">🎤 Mute</button>
     <button id="groupCamera">📷 Camera</button>
@@ -4872,50 +4836,40 @@ async function sendFileSession(session) {
     }
 }
 
-async function prepareIncomingFile(session, autoAccept = false) {
+async function prepareIncomingFile(session) {
     const meta = session.incomingMeta;
     if (!meta) return;
     session.incomingParts = [];
-    session.incomingFallbackParts = [];
     session.incomingReceived = 0;
-    session.autoAccept = !!autoAccept || !!session.autoAccept;
 
-    // One-person transfers keep the existing save/accept workflow.
-    // Broadcast transfers are accepted automatically and held in memory until
-    // complete, then exposed with Open/Download (and inline preview for images).
-    if (!session.autoAccept) {
-        try {
-            const isImage = String(meta.mime || "").indexOf("image/") === 0;
-            if (!isImage && "showSaveFilePicker" in window) {
-                session.incomingHandle = await window.showSaveFilePicker({
-                    suggestedName: meta.name,
-                    types: [{
-                        description: "Received file",
-                        accept: { [meta.mime || "application/octet-stream"]: ["." + (meta.name.split(".").pop() || "bin")] }
-                    }]
-                });
-                session.incomingWriter = await session.incomingHandle.createWritable();
-            }
-        } catch (error) {
-            if (error?.name === "AbortError") setFileStatus("File save cancelled.");
-            else setFileStatus("Could not open the save location.");
-            try { session.channel?.send(JSON.stringify({ type: "fileDeclined" })); } catch {}
-            closeFileSession(session);
-            pendingIncomingFiles.delete(session.transferId);
-            return;
+    try {
+        const isImage = String(meta.mime || "").indexOf("image/") === 0;
+        if (!isImage && "showSaveFilePicker" in window) {
+            session.incomingHandle = await window.showSaveFilePicker({
+                suggestedName: meta.name,
+                types: [{
+                    description: "Received file",
+                    accept: { [meta.mime || "application/octet-stream"]: ["." + (meta.name.split(".").pop() || "bin")] }
+                }]
+            });
+            session.incomingWriter = await session.incomingHandle.createWritable();
         }
+    } catch (error) {
+        if (error?.name === "AbortError") setFileStatus("File save cancelled.");
+        else setFileStatus("Could not open the save location.");
+        try { session.channel?.send(JSON.stringify({ type: "fileDeclined" })); } catch {}
+        closeFileSession(session);
+        pendingIncomingFiles.delete(session.transferId);
+        return;
     }
 
     session.accepted = true;
     session.status = "receiving";
     pendingIncomingFiles.delete(session.transferId);
     incomingFile.style.display = "none";
-    if (activeIncomingTransferId === session.transferId) activeIncomingTransferId = null;
+    activeIncomingTransferId = null;
     setFileProgress(0, meta.size, "Receiving " + meta.name + "...");
-    setFileStatus(
-        (session.autoAccept ? "🌐 Automatically receiving " : "🟢 Receiving ") +
-        meta.name + " from " + session.targetName + "..."
-    );
+    setFileStatus("🟢 Receiving " + meta.name + " from " + session.targetName + "...");
     if (session.channel?.readyState === "open") {
         try { session.channel.send(JSON.stringify({ type: "fileReady" })); } catch {}
     }
@@ -4973,11 +4927,7 @@ async function handleIncomingFileData(session, data) {
             session.incomingParts = [];
             session.incomingFallbackParts = [];
             session.incomingReceived = 0;
-            if (session.autoAccept) {
-                if (!session.accepted) prepareIncomingFile(session, true);
-            } else {
-                queueIncomingFileRequest(session);
-            }
+            queueIncomingFileRequest(session);
             return;
         }
 
@@ -4998,14 +4948,14 @@ async function handleIncomingFileData(session, data) {
                         size: session.incomingMeta.size,
                         mime: session.incomingMeta.mime,
                         objectUrl: session.receivedObjectUrl
-                    }, session.autoAccept ? "🌐 Shared with everyone" : "📎 File received");
+                    }, "📎 File received");
                 } else {
                     addFileMessage(session.targetName, {
                         transferId: session.transferId,
                         name: session.incomingMeta.name,
                         size: session.incomingMeta.size,
                         mime: session.incomingMeta.mime
-                    }, session.autoAccept ? "🌐 Shared with everyone" : "📎 File received and saved");
+                    }, "📎 File received and saved");
                 }
                 session.status = "complete";
                 setFileProgress(session.incomingMeta.size, session.incomingMeta.size, "✅ Received " + session.incomingMeta.name);
@@ -5056,7 +5006,11 @@ function buildSenderSession(file, targetUser, isBroadcast) {
         isBroadcast: !!isBroadcast,
         status: "connecting"
     };
-    setupFileSession(session, true);
+
+    // Send the request FIRST. The receiver creates its RTCPeerConnection from
+    // this request. Only after that do we create/send the WebRTC offer. This
+    // prevents the offer from arriving before the receiver has a session.
+    fileSessions.set(session.transferId, session);
     chat.send({
         type: "fileRequest",
         transferId: session.transferId,
@@ -5069,6 +5023,13 @@ function buildSenderSession(file, targetUser, isBroadcast) {
         fileSize: file.size,
         fileMime: file.type || "application/octet-stream"
     });
+
+    // Yield one task so the receiver can process fileRequest before fileOffer.
+    setTimeout(() => {
+        if (!fileSessions.has(session.transferId)) return;
+        setupFileSession(session, true);
+    }, 0);
+
     return session;
 }
 
@@ -5143,7 +5104,6 @@ function handleFileSignal(message) {
             role: "receiver",
             status: "connecting",
             accepted: false,
-            autoAccept: !!message.broadcast,
             incomingFallbackParts: [],
             incomingMeta: {
                 name: message.fileName,
@@ -5153,11 +5113,7 @@ function handleFileSignal(message) {
         };
         fileSessions.set(transferId, session);
         setupFileSession(session, false);
-        if (session.autoAccept) {
-            prepareIncomingFile(session, true);
-        } else {
-            queueIncomingFileRequest(session);
-        }
+        queueIncomingFileRequest(session);
         return;
     }
 
@@ -5980,6 +5936,7 @@ window.addEventListener(
    GROUP VIDEO CALL — WEBRTC MESH
 ================================================== */
 let groupActive=false, groupLocalStream=null, groupScreenStream=null, groupPeers=new Map();
+let groupCallSessionId=null;
 
 function groupTile(id,name,stream){
   let tile=document.getElementById("group-tile-"+id);
@@ -5993,6 +5950,7 @@ function groupTile(id,name,stream){
 }
 function removeGroupPeer(id){ groupPeers.get(id)?.pc?.close(); groupPeers.delete(id); document.getElementById("group-tile-"+id)?.remove(); }
 async function ensureGroupPeer(id,name,initiator){
+  if(!id || id===myId || !groupActive)return null;
   if(groupPeers.has(id)) return groupPeers.get(id);
   const pc=new RTCPeerConnection(rtcConfig);
   const peer={pc,name,remoteStream:new MediaStream()}; groupPeers.set(id,peer);
@@ -6001,34 +5959,68 @@ async function ensureGroupPeer(id,name,initiator){
     e.streams[0]?.getTracks().forEach(t=>peer.remoteStream.addTrack(t));
     groupTile(id,name,peer.remoteStream);
   };
-  pc.onicecandidate=e=>{if(e.candidate)chat.send({type:"groupIce",toId:id,fromId:myId,candidate:e.candidate});};
+  pc.onicecandidate=e=>{
+    if(e.candidate)chat.send({type:"groupIce",toId:id,fromId:myId,callId:groupCallSessionId,candidate:e.candidate});
+  };
   pc.onconnectionstatechange=()=>{if(["failed","closed"].includes(pc.connectionState))removeGroupPeer(id);};
   if(initiator){
     const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
-    chat.send({type:"groupOffer",toId:id,fromId:myId,fromName:nameBox.value.trim(),offer:pc.localDescription});
+    chat.send({type:"groupOffer",toId:id,fromId:myId,fromName:nameBox.value.trim(),callId:groupCallSessionId,offer:pc.localDescription});
   }
   return peer;
 }
-async function openGroupCall(){
-  if(groupActive)return;
+async function openGroupCall(options={}){
+  if(groupActive)return true;
+  const invited=options.invited===true;
+  const requestedCallId=options.callId||null;
+  const participantIds=Array.isArray(options.participantIds)?options.participantIds.filter(Boolean):[];
   try{
     groupLocalStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    groupCallSessionId=requestedCallId||crypto.randomUUID();
     groupActive=true; document.getElementById("groupCall").style.display="flex";
     groupTile("local",nameBox.value.trim()||"You",groupLocalStream);
     document.querySelector("#group-tile-local video").muted=true;
-    document.getElementById("groupCallStatus").textContent="Joining room…";
-    onlineUsers.forEach(async u=>{
-      if(u.id!==myId && myId<u.id) await ensureGroupPeer(u.id,u.name,true);
-    });
-    chat.send({type:"groupJoin",fromId:myId,fromName:nameBox.value.trim()||"Guest"});
-    setTimeout(()=>document.getElementById("groupCallStatus").textContent=(groupPeers.size+1)+" people",1200);
-  }catch(e){alert("Camera/microphone access was not available.");}
+    document.getElementById("groupCallStatus").textContent=invited?"Joining invited call…":"Joining room…";
+
+    if(!invited){
+      onlineUsers.forEach(async u=>{
+        if(u.id!==myId && myId<u.id) await ensureGroupPeer(u.id,u.name,true);
+      });
+    }
+
+    chat.send({type:"groupJoin",fromId:myId,fromName:nameBox.value.trim()||"Guest",callId:groupCallSessionId});
+
+    // An invited user connects only to the people who were already in the call.
+    if(invited){
+      for(const id of participantIds){
+        if(id===myId)continue;
+        const u=onlineUsers.get(id);
+        if(myId<id){
+          try{await ensureGroupPeer(id,u?.name||"Guest",true);}catch(err){console.error("Invited participant connection failed",err);}
+        }
+      }
+    }
+
+    setTimeout(()=>{
+      if(groupActive){
+        document.getElementById("groupCallStatus").textContent=(groupPeers.size+1)+" people";
+      }
+    },800);
+    return true;
+  }catch(e){
+    groupCallSessionId=null;
+    groupActive=false;
+    groupLocalStream?.getTracks().forEach(t=>t.stop()); groupLocalStream=null;
+    alert("Camera/microphone access was not available.");
+    return false;
+  }
 }
 function closeGroupCall(send=true){
-  if(send) try{chat.send({type:"groupLeave",fromId:myId});}catch{}
+  if(send) try{chat.send({type:"groupLeave",fromId:myId,callId:groupCallSessionId});}catch{}
   groupPeers.forEach(p=>p.pc.close()); groupPeers.clear();
   groupLocalStream?.getTracks().forEach(t=>t.stop()); groupLocalStream=null;
   groupScreenStream?.getTracks().forEach(t=>t.stop()); groupScreenStream=null;
+  groupCallSessionId=null;
   document.getElementById("groupCallGrid").innerHTML="";
   document.getElementById("groupCall").style.display="none"; groupActive=false;
 }
@@ -6143,24 +6135,26 @@ document.getElementById("groupSwitchCamera").addEventListener("click",switchGrou
 
 
 chat.on("message",async({message})=>{
-  if(!message||!groupActive)return;
-  if(message.type==="groupJoin" && message.fromId!==myId){
+  if(!message||!message.type)return;
+  const sameCall=!message.callId || message.callId===groupCallSessionId;
+  if(message.type==="groupJoin" && groupActive && message.fromId!==myId && sameCall){
     if(myId<message.fromId) await ensureGroupPeer(message.fromId,message.fromName,true);
     return;
   }
-  if(message.type==="groupOffer" && message.toId===myId){
+  if(message.type==="groupOffer" && groupActive && message.toId===myId && sameCall){
     const peer=await ensureGroupPeer(message.fromId,message.fromName,false);
+    if(!peer)return;
     await peer.pc.setRemoteDescription(new RTCSessionDescription(message.offer));
     const answer=await peer.pc.createAnswer(); await peer.pc.setLocalDescription(answer);
-    chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,answer:peer.pc.localDescription}); return;
+    chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,callId:groupCallSessionId,answer:peer.pc.localDescription}); return;
   }
-  if(message.type==="groupAnswer" && message.toId===myId){
+  if(message.type==="groupAnswer" && groupActive && message.toId===myId && sameCall){
     const peer=groupPeers.get(message.fromId); if(peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(message.answer)); return;
   }
-  if(message.type==="groupIce" && message.toId===myId){
+  if(message.type==="groupIce" && groupActive && message.toId===myId && sameCall){
     const peer=groupPeers.get(message.fromId); if(peer) try{await peer.pc.addIceCandidate(new RTCIceCandidate(message.candidate));}catch{} return;
   }
-  if(message.type==="groupLeave"){removeGroupPeer(message.fromId);return;}
+  if(message.type==="groupLeave" && groupActive && sameCall){removeGroupPeer(message.fromId);return;}
 });
 window.addEventListener("beforeunload",()=>{if(groupActive)closeGroupCall(false);});
 
@@ -6909,5 +6903,814 @@ aiRequest.addEventListener("keydown", event => {
 
 </script>
 
+
+<style id="tchatCriticalFixesStyles">
+/* Restored / enhanced call features */
+#groupCall{position:fixed;inset:0;z-index:50000;display:none;flex-direction:column;background:#070a0f;color:#fff}
+#groupCallChatToggle,#groupInviteButton{background:#2b3445!important;color:#fff!important}
+#groupCallChatPanel{display:none;position:absolute;top:58px;right:0;bottom:60px;width:min(360px,92vw);z-index:25;background:#141820;border-left:1px solid #303848;box-shadow:-18px 0 45px rgba(0,0,0,.35)}
+#groupCallChatPanel.open{display:flex;flex-direction:column}
+#groupCallChatHeader{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:#1d2430;border-bottom:1px solid #303848;font-weight:800}
+#groupCallChatClose{width:34px!important;height:34px!important;padding:0!important;border-radius:50%!important;background:#2b3445!important}
+#groupCallChatMessages{flex:1;min-height:0;overflow:auto;padding:11px}
+.groupCallChatMessage{margin:0 0 9px;padding:8px 10px;border-radius:11px;background:#202735;overflow-wrap:anywhere}
+.groupCallChatMessage.mine{background:#285a83}
+.groupCallChatName{font-size:11px;color:#aeb9cc;margin-bottom:3px;font-weight:700}
+.groupCallChatText{white-space:pre-wrap;line-height:1.4}
+#groupCallChatForm{display:flex;gap:7px;padding:9px;background:#1d2430;border-top:1px solid #303848}
+#groupCallChatInput{flex:1;min-width:0;resize:none;color:white;background:#0c1017;border:1px solid #3b4556;border-radius:9px;padding:9px}
+#groupCallChatSend{flex:0 0 auto}
+#groupInviteButton{background:#334056!important}
+#groupInviteDialog,#groupInvitePicker{display:none;position:fixed;inset:0;z-index:70000;background:rgba(3,7,13,.76);align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(7px)}
+#groupInviteBox,#groupInvitePickerBox{width:min(430px,100%);max-height:90vh;overflow:auto;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:22px;padding:22px;box-shadow:0 25px 90px rgba(0,0,0,.45)}
+#groupInviteBox{text-align:center}
+.groupInviteIcon{width:70px;height:70px;margin:0 auto 10px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--surface2);font-size:33px;animation:tchatInvitePulse 1.2s ease-in-out infinite}
+@keyframes tchatInvitePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06);box-shadow:0 0 0 12px rgba(79,109,245,0)}}
+#groupInviteBox h2,#groupInvitePickerBox h2{margin:0 0 8px;font-size:20px}
+#groupInviteText{margin:0;line-height:1.45}
+#groupInviteRoom{margin-top:8px;color:var(--muted);font-size:12px}
+#groupInviteButtons{display:flex;gap:9px;margin-top:18px}
+#groupInviteButtons button{flex:1;min-height:47px}
+#groupInviteDecline{background:#636d7d!important}
+.groupInviteHint{margin-top:11px;color:var(--muted);font-size:11px;line-height:1.45}
+.groupPickerHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:11px}
+.groupPickerHeader p{margin:3px 0 0;color:var(--muted);font-size:12px}
+.groupPickerClose{width:38px!important;height:38px!important;padding:0!important;border-radius:50%!important;background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--line)!important}
+#groupPickerSearch{width:100%;margin:0 0 9px}
+#groupPickerList{display:flex;flex-direction:column;gap:6px}
+.groupPickerUser{display:flex;align-items:center;gap:9px;width:100%;padding:10px 11px!important;text-align:left;background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--line)!important;border-radius:12px!important}
+.groupPickerUser:hover{background:var(--line)!important}
+.groupPickerDot{color:#2ecc71;font-size:10px}.groupPickerName{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.groupPickerArrow{color:var(--muted);font-weight:800}.groupPickerEmpty{padding:16px 8px;color:var(--muted);text-align:center;font-size:12px}
+@media(max-width:700px){
+  #groupCallChatPanel{top:58px;left:0;right:0;bottom:60px;width:auto;border-left:0}
+  #groupCallChatForm{padding-bottom:max(9px,env(safe-area-inset-bottom))}
+  #groupCallControls{padding-bottom:max(9px,env(safe-area-inset-bottom))}
+}
+</style>
+
+<script id="tchatCriticalFixes">
+/* TChat Enhancements — GitHub Pages only
+ *
+ * Drop this script near the end of index.html, immediately before </body>.
+ * It intentionally reuses the existing TChat globals:
+ *   chat, myId, nameBox, onlineUsers
+ *   groupActive, groupLocalStream, groupPeers, openGroupCall, ensureGroupPeer
+ *   showDesktopNotification, showNotification
+ *
+ * No backend, database, worker, or external service is required.
+ */
+(() => {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const q = (sel, root = document) => root.querySelector(sel);
+
+  function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+    }[c]));
+  }
+
+  function toast(title, text, kind = "info") {
+    try {
+      if (typeof showNotification === "function") {
+        showNotification(title, text, kind);
+        return;
+      }
+    } catch {}
+    const stack = $("notificationStack");
+    if (!stack) return;
+    const item = document.createElement("div");
+    item.className = "notificationToast";
+    item.innerHTML = `<strong>${escapeHtml(title)}</strong><div>${escapeHtml(text)}</div>`;
+    stack.appendChild(item);
+    setTimeout(() => item.remove(), 4500);
+  }
+
+  function sendRoom(packet) {
+    try {
+      if (typeof chat?.send === "function") chat.send(packet);
+      return true;
+    } catch (error) {
+      console.warn("TChat enhancement send failed:", error);
+      toast("Connection problem", "That action could not be sent.", "warning");
+      return false;
+    }
+  }
+
+  /* ============================================================
+     ALEX SMART ACTIONS
+     Uses the existing local-AI UI/model so it is not duplicated.
+  ============================================================ */
+  function initAlexEnhancements() {
+    const requestBox = $("localAIRequest");
+    const hint = q("#localAIBox .localAIHint");
+    const generate = $("localAIGenerate");
+    const aiBox = $("localAIBox");
+    if (!requestBox || !generate || !aiBox || !hint) return;
+
+    if ($("alexQuickActions")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "alexQuickActions";
+    wrap.innerHTML = `
+      <div class="alexQuickTitle">⚡ Smart actions</div>
+      <div class="alexQuickRow">
+        <button type="button" data-alex-action="reply">↩ Reply to latest</button>
+        <button type="button" data-alex-action="friendly">😊 Friendlier</button>
+        <button type="button" data-alex-action="shorter">✂️ Shorter</button>
+        <button type="button" data-alex-action="clearer">✨ Clearer</button>
+        <button type="button" data-alex-action="grammar">🧹 Fix grammar</button>
+        <button type="button" data-alex-action="selection">🖱️ Use selected text</button>
+      </div>
+      <div id="alexQuickHint">These buttons prepare a request for the existing local Alex model.</div>
+    `;
+    hint.insertAdjacentElement("afterend", wrap);
+
+    function latestMessage() {
+      const nodes = [...document.querySelectorAll("#chat .message")];
+      const node = nodes.at(-1);
+      if (!node) return null;
+      const name = q(".name", node)?.textContent?.trim() || "the person";
+      const text = q(".text", node)?.textContent?.trim()
+        || node.textContent?.trim() || "";
+      return { name, text: text.slice(0, 2500) };
+    }
+
+    function setAlexPrompt(prompt) {
+      requestBox.value = prompt;
+      requestBox.focus();
+      generate.click();
+    }
+
+    wrap.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-alex-action]");
+      if (!button) return;
+      const action = button.dataset.alexAction;
+
+      if (action === "reply") {
+        const latest = latestMessage();
+        if (!latest) {
+          toast("Alex", "There isn't a message to reply to yet.", "warning");
+          return;
+        }
+        setAlexPrompt(
+          `Write a natural reply to ${latest.name}'s latest message. ` +
+          `Reply directly to what they said and do not invent facts.\n\n` +
+          `Latest message from ${latest.name}:\n${latest.text}`
+        );
+        return;
+      }
+
+      if (action === "friendly") {
+        const source = requestBox.value.trim();
+        setAlexPrompt(
+          source
+            ? `Rewrite this as a warm, friendly chat message while keeping the exact meaning:\n${source}`
+            : "Write a warm, friendly version of the message I am trying to send."
+        );
+        return;
+      }
+
+      if (action === "shorter") {
+        const source = requestBox.value.trim();
+        setAlexPrompt(
+          source
+            ? `Rewrite this as a shorter chat message without losing the important meaning:\n${source}`
+            : "Write a concise version of the message I am trying to send."
+        );
+        return;
+      }
+
+      if (action === "clearer") {
+        const source = requestBox.value.trim();
+        setAlexPrompt(
+          source
+            ? `Rewrite this so it is clearer and easier to understand, while keeping the same meaning:\n${source}`
+            : "Rewrite my intended message so it is clear and easy to understand."
+        );
+        return;
+      }
+
+      if (action === "grammar") {
+        const source = requestBox.value.trim();
+        setAlexPrompt(
+          source
+            ? `Correct the grammar and spelling in this chat message while keeping its meaning and natural tone:\n${source}`
+            : "Fix the grammar and spelling of the message I am trying to send."
+        );
+        return;
+      }
+
+      if (action === "selection") {
+        const selected = String(window.getSelection?.() || "").trim();
+        if (!selected) {
+          toast("Alex", "Select some text on the page first.", "warning");
+          return;
+        }
+        setAlexPrompt(
+          `Rewrite the following selected text as a natural chat message while preserving its meaning:\n${selected.slice(0, 3000)}`
+        );
+      }
+    });
+  }
+
+  /* ============================================================
+     LOCAL TOOLBOX
+     Calculator + stopwatch + countdown + random picker.
+  ============================================================ */
+  function initEnhancedToolbox() {
+    const toolbox = $("toolboxPanel");
+    if (!toolbox || $("enhancedLocalTools")) return;
+
+    const card = document.createElement("div");
+    card.id = "enhancedLocalTools";
+    card.className = "toolboxCard toolboxWide";
+    card.innerHTML = `
+      <h4>🧰 Enhanced local utilities</h4>
+      <p>These run entirely in this browser and do not require a server.</p>
+
+      <div class="etoolGrid">
+        <div class="etoolMini">
+          <div class="etoolLabel">🧮 Calculator</div>
+          <div class="etoolCalcRow">
+            <input id="etoolCalcInput" inputmode="decimal" placeholder="12 * (4 + 3)">
+            <button id="etoolCalcGo" type="button">=</button>
+          </div>
+          <div id="etoolCalcResult" class="etoolResult">Ready</div>
+        </div>
+
+        <div class="etoolMini">
+          <div class="etoolLabel">⏱ Stopwatch</div>
+          <div id="etoolStopwatch" class="etoolBig">00:00.0</div>
+          <div class="etoolBtns">
+            <button id="etoolStopStart" type="button">Start</button>
+            <button id="etoolStopReset" type="button" class="secondary">Reset</button>
+          </div>
+        </div>
+
+        <div class="etoolMini">
+          <div class="etoolLabel">⏳ Countdown</div>
+          <div class="etoolCountRow">
+            <input id="etoolMin" type="number" min="0" max="999" value="1" aria-label="Minutes">
+            <span>:</span>
+            <input id="etoolSec" type="number" min="0" max="59" value="00" aria-label="Seconds">
+          </div>
+          <div id="etoolCountdown" class="etoolBig">01:00</div>
+          <div class="etoolBtns">
+            <button id="etoolCountStart" type="button">Start</button>
+            <button id="etoolCountReset" type="button" class="secondary">Reset</button>
+          </div>
+        </div>
+
+        <div class="etoolMini">
+          <div class="etoolLabel">🎯 Random picker</div>
+          <input id="etoolPickerInput" placeholder="Alice, Bob, Charlie">
+          <button id="etoolPickerGo" type="button">Pick one</button>
+          <div id="etoolPickerResult" class="etoolResult">Enter choices separated by commas.</div>
+        </div>
+      </div>
+    `;
+    toolbox.appendChild(card);
+
+    /* Safe arithmetic parser: numbers, + - * / %, parentheses, decimals. */
+    function calculateExpression(raw) {
+      const expr = String(raw).replace(/\s+/g, "");
+      if (!expr || !/^[0-9.+\-*/%()]+$/.test(expr)) {
+        throw new Error("Use only numbers, parentheses, and + − × ÷ %.");
+      }
+
+      const tokens = [];
+      let i = 0;
+      while (i < expr.length) {
+        const c = expr[i];
+        if (/[0-9.]/.test(c)) {
+          let j = i + 1;
+          while (j < expr.length && /[0-9.]/.test(expr[j])) j++;
+          const number = Number(expr.slice(i, j));
+          if (!Number.isFinite(number)) throw new Error("Invalid number.");
+          tokens.push(number);
+          i = j;
+          continue;
+        }
+        if ("+-*/%()".includes(c)) {
+          tokens.push(c);
+          i++;
+          continue;
+        }
+        throw new Error("Invalid expression.");
+      }
+
+      const output = [];
+      const ops = [];
+      const precedence = { "+":1, "-":1, "*":2, "/":2, "%":2 };
+      let expectValue = true;
+
+      for (const token of tokens) {
+        if (typeof token === "number") {
+          output.push(token);
+          expectValue = false;
+          continue;
+        }
+        if (token === "(") {
+          ops.push(token);
+          expectValue = true;
+          continue;
+        }
+        if (token === ")") {
+          let found = false;
+          while (ops.length) {
+            const op = ops.pop();
+            if (op === "(") { found = true; break; }
+            output.push(op);
+          }
+          if (!found) throw new Error("Unmatched parenthesis.");
+          expectValue = false;
+          continue;
+        }
+
+        /* Treat unary +/− as 0 ± value for simple expressions. */
+        if (expectValue && (token === "+" || token === "-")) output.push(0);
+        else if (expectValue) throw new Error("Operator in the wrong place.");
+
+        while (
+          ops.length &&
+          ops.at(-1) !== "(" &&
+          precedence[ops.at(-1)] >= precedence[token]
+        ) {
+          output.push(ops.pop());
+        }
+        ops.push(token);
+        expectValue = true;
+      }
+
+      if (expectValue && output.length) throw new Error("Expression ends with an operator.");
+      while (ops.length) {
+        const op = ops.pop();
+        if (op === "(") throw new Error("Unmatched parenthesis.");
+        output.push(op);
+      }
+
+      const stack = [];
+      for (const token of output) {
+        if (typeof token === "number") stack.push(token);
+        else {
+          const b = stack.pop();
+          const a = stack.pop();
+          if (a === undefined || b === undefined) throw new Error("Invalid expression.");
+          let result;
+          if (token === "+") result = a + b;
+          if (token === "-") result = a - b;
+          if (token === "*") result = a * b;
+          if (token === "/") {
+            if (b === 0) throw new Error("Cannot divide by zero.");
+            result = a / b;
+          }
+          if (token === "%") {
+            if (b === 0) throw new Error("Cannot divide by zero.");
+            result = a % b;
+          }
+          if (!Number.isFinite(result)) throw new Error("Result is too large.");
+          stack.push(result);
+        }
+      }
+      if (stack.length !== 1) throw new Error("Invalid expression.");
+      return stack[0];
+    }
+
+    $("etoolCalcGo").onclick = () => {
+      const out = $("etoolCalcResult");
+      try {
+        const value = calculateExpression($("etoolCalcInput").value);
+        out.textContent = Number.isInteger(value) ? String(value) : String(Number(value.toFixed(10)));
+      } catch (e) {
+        out.textContent = e.message;
+      }
+    };
+    $("etoolCalcInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") $("etoolCalcGo").click();
+    });
+
+    let swRunning = false;
+    let swStarted = 0;
+    let swElapsed = 0;
+    let swTimer = null;
+    function swText(ms) {
+      const seconds = Math.floor(ms / 1000);
+      const tenths = Math.floor((ms % 1000) / 100);
+      const mm = String(Math.floor(seconds / 60)).padStart(2, "0");
+      const ss = String(seconds % 60).padStart(2, "0");
+      return `${mm}:${ss}.${tenths}`;
+    }
+    function renderSW() {
+      $("etoolStopwatch").textContent = swText(swElapsed + (swRunning ? performance.now() - swStarted : 0));
+    }
+    $("etoolStopStart").onclick = () => {
+      if (!swRunning) {
+        swRunning = true;
+        swStarted = performance.now();
+        $("etoolStopStart").textContent = "Pause";
+        swTimer = setInterval(renderSW, 100);
+      } else {
+        swElapsed += performance.now() - swStarted;
+        swRunning = false;
+        clearInterval(swTimer);
+        $("etoolStopStart").textContent = "Start";
+        renderSW();
+      }
+    };
+    $("etoolStopReset").onclick = () => {
+      swRunning = false;
+      clearInterval(swTimer);
+      swElapsed = 0;
+      $("etoolStopStart").textContent = "Start";
+      renderSW();
+    };
+
+    let countRunning = false;
+    let countRemaining = 60000;
+    let countTimer = null;
+    function readCountInputs() {
+      const m = Math.max(0, Math.min(999, Number($("etoolMin").value) || 0));
+      const s = Math.max(0, Math.min(59, Number($("etoolSec").value) || 0));
+      return Math.round((m * 60 + s) * 1000);
+    }
+    function countText(ms) {
+      const total = Math.max(0, Math.ceil(ms / 1000));
+      return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+    }
+    function renderCount() {
+      $("etoolCountdown").textContent = countText(countRemaining);
+    }
+    $("etoolCountStart").onclick = () => {
+      if (!countRunning) {
+        if (countRemaining <= 0) countRemaining = readCountInputs();
+        countRunning = true;
+        $("etoolCountStart").textContent = "Pause";
+        let last = performance.now();
+        countTimer = setInterval(() => {
+          const now = performance.now();
+          countRemaining -= now - last;
+          last = now;
+          if (countRemaining <= 0) {
+            countRemaining = 0;
+            countRunning = false;
+            clearInterval(countTimer);
+            $("etoolCountStart").textContent = "Start";
+            toast("Countdown", "Time's up!", "success");
+            try { navigator.vibrate?.([120, 80, 120]); } catch {}
+          }
+          renderCount();
+        }, 100);
+      } else {
+        countRunning = false;
+        clearInterval(countTimer);
+        $("etoolCountStart").textContent = "Start";
+      }
+    };
+    $("etoolCountReset").onclick = () => {
+      countRunning = false;
+      clearInterval(countTimer);
+      countRemaining = readCountInputs();
+      $("etoolCountStart").textContent = "Start";
+      renderCount();
+    };
+    $("etoolMin").addEventListener("change", () => {
+      if (!countRunning) {
+        countRemaining = readCountInputs();
+        renderCount();
+      }
+    });
+    $("etoolSec").addEventListener("change", () => {
+      if (!countRunning) {
+        countRemaining = readCountInputs();
+        renderCount();
+      }
+    });
+    renderCount();
+
+    $("etoolPickerGo").onclick = () => {
+      const values = $("etoolPickerInput").value
+        .split(",")
+        .map(v => v.trim())
+        .filter(Boolean);
+      $("etoolPickerResult").textContent = values.length
+        ? `🎉 ${values[Math.floor(Math.random() * values.length)]}`
+        : "Enter choices separated by commas.";
+    };
+  }
+
+
+  /* ============================================================
+     FIXED GROUP CALL INVITES + CALL CHAT
+  ============================================================ */
+  const pendingGroupInvites = new Map();
+  let activeGroupInvite = null;
+
+  function roomSend(packet) {
+    try {
+      if (typeof chat?.send !== "function") throw new Error("Chat connection is not ready.");
+      chat.send(packet);
+      return true;
+    } catch (error) {
+      console.error("TChat room send failed:", error);
+      toast("Connection problem", "That action could not be sent.", "warning");
+      return false;
+    }
+  }
+
+  function addGroupCallChatLine(name, text, mine=false) {
+    const box = $("groupCallChatMessages");
+    if (!box) return;
+    const item = document.createElement("div");
+    item.className = "groupCallChatMessage" + (mine ? " mine" : "");
+    const n = document.createElement("div");
+    n.className = "groupCallChatName";
+    n.textContent = name || "Guest";
+    const t = document.createElement("div");
+    t.className = "groupCallChatText";
+    t.textContent = text || "";
+    item.append(n,t);
+    box.appendChild(item);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function setGroupChatOpen(open) {
+    const panel = $("groupCallChatPanel");
+    const button = $("groupCallChatToggle");
+    if (!panel) return;
+    panel.classList.toggle("open", open);
+    if (button) button.textContent = open ? "💬 Close chat" : "💬 Call chat";
+  }
+
+  function initGroupCallChat() {
+    if ($("groupCallChatToggle")) return;
+    const controls = $("groupCallControls");
+    const hangup = $("groupHangup");
+    if (!controls || !hangup) return;
+
+    const toggle = document.createElement("button");
+    toggle.id = "groupCallChatToggle";
+    toggle.type = "button";
+    toggle.textContent = "💬 Call chat";
+    toggle.onclick = () => setGroupChatOpen(!$("groupCallChatPanel")?.classList.contains("open"));
+    controls.insertBefore(toggle, hangup);
+
+    $("groupCallChatClose").onclick = () => setGroupChatOpen(false);
+    $("groupCallChatForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const input = $("groupCallChatInput");
+      const text = input.value.trim();
+      if (!text || !groupActive || !groupCallSessionId) return;
+      const fromName = (nameBox?.value || "").trim() || "Guest";
+      if (!roomSend({type:"groupCallChat",callId:groupCallSessionId,fromId:myId,fromName,text})) return;
+      addGroupCallChatLine(fromName,text,true);
+      input.value = "";
+      input.focus();
+    });
+    $("groupCallChatInput").addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        $("groupCallChatForm").requestSubmit();
+      }
+    });
+  }
+
+  function installGroupInviteDialog() {
+    if ($("groupInviteDialog")) return;
+    const modal = document.createElement("div");
+    modal.id = "groupInviteDialog";
+    modal.innerHTML = `
+      <div id="groupInviteBox" role="dialog" aria-modal="true" aria-labelledby="groupInviteTitle">
+        <div class="groupInviteIcon">📞</div>
+        <h2 id="groupInviteTitle">Incoming group video call</h2>
+        <p id="groupInviteText">Someone is inviting you to join a group video call.</p>
+        <div id="groupInviteRoom"></div>
+        <div id="groupInviteButtons">
+          <button id="groupInviteAccept" type="button">✅ Accept</button>
+          <button id="groupInviteDecline" type="button">☎ Hang Up</button>
+        </div>
+        <div class="groupInviteHint">Accepting will open your camera and microphone and join the existing call.</div>
+      </div>`;
+    document.body.appendChild(modal);
+    $("groupInviteAccept").onclick = acceptGroupInvite;
+    $("groupInviteDecline").onclick = () => finishGroupInvite("declined");
+    modal.addEventListener("click", e => { if (e.target === modal) finishGroupInvite("declined"); });
+  }
+
+  function showGroupInvite(message) {
+    activeGroupInvite = message;
+    const modal = $("groupInviteDialog");
+    $("groupInviteText").textContent = `${message.fromName || "Someone"} is inviting you to join their group video call.`;
+    $("groupInviteRoom").textContent = message.room ? `Room: ${message.room}` : "";
+    modal.style.display = "flex";
+
+    try { startCallRinger(); } catch {}
+    try { notifyUser("📞 Incoming group video call", `${message.fromName || "Someone"} wants you to join a group call.`, "call", true); } catch {}
+
+    document.title = "📞 Incoming group call • TChat";
+    window.clearTimeout(showGroupInvite.expiryTimer);
+    showGroupInvite.expiryTimer = window.setTimeout(() => {
+      if (activeGroupInvite?.inviteId === message.inviteId) {
+        finishGroupInvite("expired");
+        toast("Group call", "The invitation expired.", "warning");
+      }
+    }, 30000);
+  }
+
+  function finishGroupInvite(reason) {
+    const invite = activeGroupInvite;
+    activeGroupInvite = null;
+    window.clearTimeout(showGroupInvite.expiryTimer);
+    try { stopCallRinger(); } catch {}
+    const modal = $("groupInviteDialog");
+    if (modal) modal.style.display = "none";
+    document.title = originalTitle || "TChat";
+
+    if (invite && (reason === "declined" || reason === "expired")) {
+      roomSend({type:"groupInviteDeclined",inviteId:invite.inviteId,fromId:myId,fromName:(nameBox?.value||"").trim()||"Guest",toId:invite.fromId,reason});
+    }
+  }
+
+  async function acceptGroupInvite() {
+    const invite = activeGroupInvite;
+    if (!invite) return;
+    try { stopCallRinger(); } catch {}
+    const modal = $("groupInviteDialog");
+    if (modal) modal.style.display = "none";
+    activeGroupInvite = null;
+    window.clearTimeout(showGroupInvite.expiryTimer);
+    document.title = originalTitle || "TChat";
+
+    const participants = Array.isArray(invite.participantIds) ? invite.participantIds : [invite.fromId];
+    let opened = false;
+    try {
+      opened = await openGroupCall({
+        invited: true,
+        callId: invite.callId,
+        participantIds: participants
+      });
+    } catch (error) {
+      console.error("Invited group call could not open:", error);
+    }
+
+    const fromName = (nameBox?.value || "").trim() || "Guest";
+    if (!opened) {
+      roomSend({type:"groupInviteDeclined",inviteId:invite.inviteId,fromId:myId,fromName,toId:invite.fromId,reason:"media-unavailable"});
+      return;
+    }
+    roomSend({type:"groupInviteAccepted",inviteId:invite.inviteId,fromId:myId,fromName,toId:invite.fromId,callId:invite.callId});
+    toast("📞 Joining group call", `Joining ${invite.fromName || "the caller"}…`, "success");
+  }
+
+  function availableInviteUsers() {
+    const users = [...(onlineUsers instanceof Map ? onlineUsers.values() : [])];
+    return users
+      .filter(u => u && u.id && u.id !== myId && !groupPeers?.has?.(u.id))
+      .sort((a,b) => String(a.name || "Guest").localeCompare(String(b.name || "Guest")));
+  }
+
+  function openGroupInvitePicker() {
+    const users = availableInviteUsers();
+    if (!users.length) {
+      toast("Group call", "There is nobody else available to invite right now.", "warning");
+      return;
+    }
+    $("groupInvitePicker")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "groupInvitePicker";
+    modal.innerHTML = `
+      <div id="groupInvitePickerBox" role="dialog" aria-modal="true" aria-labelledby="groupPickerTitle">
+        <div class="groupPickerHeader">
+          <div><h2 id="groupPickerTitle">👤 Invite someone</h2><p>Choose the nickname you want to ring.</p></div>
+          <button id="groupPickerClose" class="groupPickerClose" type="button">✕</button>
+        </div>
+        <input id="groupPickerSearch" type="search" placeholder="Search nicknames…" autocomplete="off">
+        <div id="groupPickerList"></div>
+      </div>`;
+    document.body.appendChild(modal);
+    const list = $("groupPickerList");
+    const search = $("groupPickerSearch");
+
+    const render = () => {
+      list.innerHTML = "";
+      const needle = search.value.trim().toLowerCase();
+      const filtered = users.filter(u => !needle || String(u.name || "").toLowerCase().includes(needle));
+      if (!filtered.length) {
+        list.innerHTML = `<div class="groupPickerEmpty">No matching nicknames are online.</div>`;
+        return;
+      }
+      for (const user of filtered) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "groupPickerUser";
+        b.innerHTML = `<span class="groupPickerDot">●</span><span class="groupPickerName"></span><span class="groupPickerArrow">→</span>`;
+        b.querySelector(".groupPickerName").textContent = user.name || "Guest";
+        b.onclick = () => { modal.remove(); sendGroupInvite(user); };
+        list.appendChild(b);
+      }
+    };
+    $("groupPickerClose").onclick = () => modal.remove();
+    modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+    search.addEventListener("input", render);
+    render();
+    search.focus();
+  }
+
+  function sendGroupInvite(user) {
+    if (!groupActive || !groupCallSessionId) {
+      toast("Group call", "You must be in a group call to invite someone.", "warning");
+      return;
+    }
+    const inviteId = `ginvite-${crypto.randomUUID()}`;
+    const fromName = (nameBox?.value || "").trim() || "Guest";
+    const participantIds = [myId, ...groupPeers.keys()];
+    const participantNames = {};
+    participantNames[myId] = fromName;
+    for (const id of groupPeers.keys()) {
+      participantNames[id] = groupPeers.get(id)?.name || onlineUsers.get(id)?.name || "Guest";
+    }
+    pendingGroupInvites.set(inviteId, {inviteId,toId:user.id,toName:user.name,createdAt:Date.now()});
+    if (!roomSend({
+      type:"groupInvite", inviteId, fromId:myId, fromName,
+      toId:user.id, toName:user.name, room:typeof room !== "undefined" ? room : "",
+      callId:groupCallSessionId, participantIds, participantNames
+    })) return;
+
+    toast("📞 Group call invitation sent", `Ringing ${user.name || "that user"}…`, "success");
+    window.setTimeout(() => {
+      const pending = pendingGroupInvites.get(inviteId);
+      if (!pending) return;
+      pendingGroupInvites.delete(inviteId);
+      toast("Group call", `${pending.toName || "The user"} did not accept the invitation.`, "warning");
+    }, 30000);
+  }
+
+  function initGroupInviteAndChat() {
+    installGroupInviteDialog();
+    initGroupCallChat();
+
+    const controls = $("groupCallControls");
+    if (controls && !$("groupInviteButton")) {
+      const button = document.createElement("button");
+      button.id = "groupInviteButton";
+      button.type = "button";
+      button.textContent = "👤 Invite user";
+      button.title = "Ring a specific nickname into this group call";
+      button.onclick = openGroupInvitePicker;
+      controls.insertBefore(button, $("groupHangup"));
+    }
+
+    if (typeof chat?.on !== "function") return;
+    if (window.__tchatCriticalGroupHandlerInstalled) return;
+    window.__tchatCriticalGroupHandlerInstalled = true;
+
+    chat.on("message", async ({message}) => {
+      if (!message || !message.type) return;
+
+      // IMPORTANT: invite messages are handled even when groupActive is false.
+      if (message.type === "groupInvite" && message.toId === myId) {
+        if (groupActive) {
+          roomSend({type:"groupInviteDeclined",inviteId:message.inviteId,fromId:myId,fromName:(nameBox?.value||"").trim()||"Guest",toId:message.fromId,reason:"already-in-group-call"});
+          return;
+        }
+        showGroupInvite(message);
+        return;
+      }
+
+      if (message.type === "groupInviteAccepted" && message.toId === myId) {
+        const pending = pendingGroupInvites.get(message.inviteId);
+        if (!pending) return;
+        pendingGroupInvites.delete(message.inviteId);
+        toast("📞 Group call", `${message.fromName || pending.toName || "The user"} accepted.`, "success");
+        return;
+      }
+
+      if (message.type === "groupInviteDeclined" && message.toId === myId) {
+        const pending = pendingGroupInvites.get(message.inviteId);
+        if (!pending) return;
+        pendingGroupInvites.delete(message.inviteId);
+        toast("Group call", `${message.fromName || pending.toName || "The user"} declined the invitation.`, "info");
+        return;
+      }
+
+      if (message.type === "groupCallChat" && groupActive && message.callId === groupCallSessionId && message.fromId !== myId) {
+        addGroupCallChatLine(message.fromName || "Guest", message.text || "", false);
+        return;
+      }
+    });
+  }
+
+  function bootCriticalFixes() {
+    initAlexEnhancements();
+    initEnhancedToolbox();
+    initGroupInviteAndChat();
+  }
+
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bootCriticalFixes, {once:true});
+  else bootCriticalFixes();
+
+})();
+</script>
 </body>
 </html>
