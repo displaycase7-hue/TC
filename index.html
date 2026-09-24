@@ -741,6 +741,34 @@ header h1:after{content:"TChat";font-weight:800;letter-spacing:-.3px;position:ab
 .fileDropZone{margin-top:10px;border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center;color:var(--muted);background:var(--surface2);transition:.15s ease}
 .fileDropZone.active{border-color:var(--accent);background:rgba(79,109,245,.08);color:var(--text)}
 .fileDropZone strong{display:block;color:var(--text);margin-bottom:3px}
+.fileShareHint{margin-top:2px;flex-basis:100%;font-size:12px;line-height:1.45;color:var(--muted);text-align:center}
+#incomingFile{
+    position:fixed;
+    inset:0;
+    z-index:53000;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    box-sizing:border-box;
+    background:rgba(8,14,25,.58);
+}
+#incomingFileBox{
+    width:min(520px, calc(100vw - 48px));
+    max-width:520px;
+    box-sizing:border-box;
+    background:var(--surface);
+    color:var(--text);
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:20px;
+    box-shadow:0 24px 80px rgba(0,0,0,.28);
+    text-align:center;
+}
+#incomingFileBox h2{margin:0 0 10px}
+#incomingFileInfo{margin:0;color:var(--muted);line-height:1.5}
+#incomingFileButtons{display:flex;gap:10px;margin-top:18px}
+#incomingFileButtons button{flex:1}
+#declineFile{background:var(--surface2)!important;color:var(--text)!important;border:1px solid var(--line)!important}
 #globalFileDropOverlay{display:none;position:fixed;inset:0;z-index:39000;background:rgba(20,25,35,.78);align-items:center;justify-content:center;padding:20px;pointer-events:none}
 #globalFileDropOverlay.active{display:flex}
 #globalFileDropOverlayBox{width:min(620px,92vw);padding:36px 28px;border:3px dashed rgba(255,255,255,.9);border-radius:24px;text-align:center;color:#fff;background:rgba(30,36,50,.94);box-shadow:0 20px 70px rgba(0,0,0,.4)}
@@ -764,8 +792,23 @@ button:hover{background:var(--accent2)}
 #onlineUsers{max-width:850px;padding:0 14px;margin:8px auto}
 #onlineUsersTitle{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .userPill{background:var(--surface);border:1px solid var(--line)}
-#fileShare{max-width:850px;padding:0 14px}
-#fileShareBox{background:var(--surface);border:1px solid var(--line);box-shadow:none}
+#fileShare{
+    width:100vw;
+    max-width:none;
+    box-sizing:border-box;
+    padding:24px;
+    background:rgba(8,14,25,.58);
+    left:0; right:0; top:0; bottom:0;
+}
+#fileShareBox{
+    width:min(620px, calc(100vw - 48px));
+    max-width:620px;
+    max-height:min(88vh,760px);
+    margin:0 auto;
+    background:var(--surface);
+    border:1px solid var(--line);
+    box-shadow:0 24px 80px rgba(0,0,0,.28);
+}
 /* hide the old one-to-one target from the main composer; the feature remains available to receive calls */
 #videoTarget,#videoRequestButton{display:none!important}
 #form:after{content:""}
@@ -967,6 +1010,7 @@ body.dark #toolsMenu button{color:var(--text)}
             <button id="chooseFile">📎 Choose File</button>
             <button id="sendFile" disabled>⬆️ Send to Person</button>
             <button id="shareEveryoneFile" disabled>🌐 Share to Everyone</button>
+            <div class="fileShareHint">Sharing to everyone sends a peer-to-peer copy to each person automatically. Single-person transfers still require their approval.</div>
             <div id="selectedFile">No file selected</div>
             <input id="filePicker" type="file">
         </div>
@@ -4828,40 +4872,50 @@ async function sendFileSession(session) {
     }
 }
 
-async function prepareIncomingFile(session) {
+async function prepareIncomingFile(session, autoAccept = false) {
     const meta = session.incomingMeta;
     if (!meta) return;
     session.incomingParts = [];
+    session.incomingFallbackParts = [];
     session.incomingReceived = 0;
+    session.autoAccept = !!autoAccept || !!session.autoAccept;
 
-    try {
-        const isImage = String(meta.mime || "").indexOf("image/") === 0;
-        if (!isImage && "showSaveFilePicker" in window) {
-            session.incomingHandle = await window.showSaveFilePicker({
-                suggestedName: meta.name,
-                types: [{
-                    description: "Received file",
-                    accept: { [meta.mime || "application/octet-stream"]: ["." + (meta.name.split(".").pop() || "bin")] }
-                }]
-            });
-            session.incomingWriter = await session.incomingHandle.createWritable();
+    // One-person transfers keep the existing save/accept workflow.
+    // Broadcast transfers are accepted automatically and held in memory until
+    // complete, then exposed with Open/Download (and inline preview for images).
+    if (!session.autoAccept) {
+        try {
+            const isImage = String(meta.mime || "").indexOf("image/") === 0;
+            if (!isImage && "showSaveFilePicker" in window) {
+                session.incomingHandle = await window.showSaveFilePicker({
+                    suggestedName: meta.name,
+                    types: [{
+                        description: "Received file",
+                        accept: { [meta.mime || "application/octet-stream"]: ["." + (meta.name.split(".").pop() || "bin")] }
+                    }]
+                });
+                session.incomingWriter = await session.incomingHandle.createWritable();
+            }
+        } catch (error) {
+            if (error?.name === "AbortError") setFileStatus("File save cancelled.");
+            else setFileStatus("Could not open the save location.");
+            try { session.channel?.send(JSON.stringify({ type: "fileDeclined" })); } catch {}
+            closeFileSession(session);
+            pendingIncomingFiles.delete(session.transferId);
+            return;
         }
-    } catch (error) {
-        if (error?.name === "AbortError") setFileStatus("File save cancelled.");
-        else setFileStatus("Could not open the save location.");
-        try { session.channel?.send(JSON.stringify({ type: "fileDeclined" })); } catch {}
-        closeFileSession(session);
-        pendingIncomingFiles.delete(session.transferId);
-        return;
     }
 
     session.accepted = true;
     session.status = "receiving";
     pendingIncomingFiles.delete(session.transferId);
     incomingFile.style.display = "none";
-    activeIncomingTransferId = null;
+    if (activeIncomingTransferId === session.transferId) activeIncomingTransferId = null;
     setFileProgress(0, meta.size, "Receiving " + meta.name + "...");
-    setFileStatus("🟢 Receiving " + meta.name + " from " + session.targetName + "...");
+    setFileStatus(
+        (session.autoAccept ? "🌐 Automatically receiving " : "🟢 Receiving ") +
+        meta.name + " from " + session.targetName + "..."
+    );
     if (session.channel?.readyState === "open") {
         try { session.channel.send(JSON.stringify({ type: "fileReady" })); } catch {}
     }
@@ -4919,7 +4973,11 @@ async function handleIncomingFileData(session, data) {
             session.incomingParts = [];
             session.incomingFallbackParts = [];
             session.incomingReceived = 0;
-            queueIncomingFileRequest(session);
+            if (session.autoAccept) {
+                if (!session.accepted) prepareIncomingFile(session, true);
+            } else {
+                queueIncomingFileRequest(session);
+            }
             return;
         }
 
@@ -4940,14 +4998,14 @@ async function handleIncomingFileData(session, data) {
                         size: session.incomingMeta.size,
                         mime: session.incomingMeta.mime,
                         objectUrl: session.receivedObjectUrl
-                    }, "📎 File received");
+                    }, session.autoAccept ? "🌐 Shared with everyone" : "📎 File received");
                 } else {
                     addFileMessage(session.targetName, {
                         transferId: session.transferId,
                         name: session.incomingMeta.name,
                         size: session.incomingMeta.size,
                         mime: session.incomingMeta.mime
-                    }, "📎 File received and saved");
+                    }, session.autoAccept ? "🌐 Shared with everyone" : "📎 File received and saved");
                 }
                 session.status = "complete";
                 setFileProgress(session.incomingMeta.size, session.incomingMeta.size, "✅ Received " + session.incomingMeta.name);
@@ -5085,6 +5143,7 @@ function handleFileSignal(message) {
             role: "receiver",
             status: "connecting",
             accepted: false,
+            autoAccept: !!message.broadcast,
             incomingFallbackParts: [],
             incomingMeta: {
                 name: message.fileName,
@@ -5094,7 +5153,11 @@ function handleFileSignal(message) {
         };
         fileSessions.set(transferId, session);
         setupFileSession(session, false);
-        queueIncomingFileRequest(session);
+        if (session.autoAccept) {
+            prepareIncomingFile(session, true);
+        } else {
+            queueIncomingFileRequest(session);
+        }
         return;
     }
 
