@@ -5939,7 +5939,6 @@ window.addEventListener(
 ================================================== */
 let groupActive=false, groupLocalStream=null, groupScreenStream=null, groupPeers=new Map();
 let groupCallSessionId=null;
-let groupJoinedAt=0;
 
 function groupTile(id,name,stream){
   let tile=document.getElementById("group-tile-"+id);
@@ -5951,85 +5950,152 @@ function groupTile(id,name,stream){
   }
   const v=tile.querySelector("video"); if(v.srcObject!==stream)v.srcObject=stream;
 }
-function removeGroupPeer(id){ groupPeers.get(id)?.pc?.close(); groupPeers.delete(id); document.getElementById("group-tile-"+id)?.remove(); }
+
+function removeGroupPeer(id){
+  const peer=groupPeers.get(id);
+  try{peer?.pc?.close();}catch{}
+  groupPeers.delete(id);
+  document.getElementById("group-tile-"+id)?.remove();
+}
+
 async function ensureGroupPeer(id,name,initiator){
   if(!id || id===myId || !groupActive)return null;
-  if(groupPeers.has(id)) return groupPeers.get(id);
+  if(groupPeers.has(id))return groupPeers.get(id);
+
   const pc=new RTCPeerConnection(rtcConfig);
-  const peer={pc,name,remoteStream:new MediaStream(),pendingIce:[]}; groupPeers.set(id,peer);
-  groupLocalStream?.getTracks().forEach(t=>pc.addTrack(t,groupLocalStream));
+  const peer={pc,name:name||"Guest",remoteStream:new MediaStream(),pendingIce:[]};
+  groupPeers.set(id,peer);
+
+  groupLocalStream?.getTracks().forEach(t=>{
+    try{pc.addTrack(t,groupLocalStream);}catch{}
+  });
+
   pc.ontrack=e=>{
-    e.streams[0]?.getTracks().forEach(t=>peer.remoteStream.addTrack(t));
+    e.streams?.[0]?.getTracks().forEach(t=>{
+      try{peer.remoteStream.addTrack(t);}catch{}
+    });
     groupTile(id,name,peer.remoteStream);
+    setGroupCallStatus();
   };
+
   pc.onicecandidate=e=>{
-    if(e.candidate)chat.send({type:"groupIce",toId:id,fromId:myId,callId:groupCallSessionId,candidate:e.candidate});
+    if(e.candidate){
+      try{chat.send({type:"groupIce",toId:id,fromId:myId,candidate:e.candidate});}catch{}
+    }
   };
-  pc.onconnectionstatechange=()=>{if(["failed","closed"].includes(pc.connectionState))removeGroupPeer(id);};
+
+  pc.onconnectionstatechange=()=>{
+    if(["failed","closed"].includes(pc.connectionState)){
+      removeGroupPeer(id);
+      setGroupCallStatus();
+    }
+  };
+
   if(initiator){
-    const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
-    chat.send({type:"groupOffer",toId:id,fromId:myId,fromName:nameBox.value.trim(),callId:groupCallSessionId,offer:pc.localDescription});
+    try{
+      const offer=await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      chat.send({
+        type:"groupOffer",
+        toId:id,
+        fromId:myId,
+        fromName:nameBox.value.trim()||"Guest",
+        offer:pc.localDescription
+      });
+    }catch(error){
+      console.error("Group offer creation failed:",error);
+      removeGroupPeer(id);
+      return null;
+    }
   }
+
   return peer;
 }
+
+function setGroupCallStatus(){
+  const el=document.getElementById("groupCallStatus");
+  if(el && groupActive)el.textContent=(groupPeers.size+1)+" people";
+}
+
 async function openGroupCall(options={}){
   if(groupActive)return true;
-  const invited=options.invited===true;
-  const requestedCallId=options.callId||null;
+
+  const requestedCallId=options?.callId||null;
   try{
     groupLocalStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-    groupCallSessionId=requestedCallId||((crypto&&crypto.randomUUID)?crypto.randomUUID():"gcall-"+Date.now()+"-"+Math.random().toString(36).slice(2));
-    groupJoinedAt=Date.now();
+    groupCallSessionId=requestedCallId || ((crypto&&crypto.randomUUID)?crypto.randomUUID():"gcall-"+Date.now()+"-"+Math.random().toString(36).slice(2));
     groupActive=true;
+
     document.getElementById("groupCall").style.display="flex";
     groupTile("local",nameBox.value.trim()||"You",groupLocalStream);
-    document.querySelector("#group-tile-local video").muted=true;
-    document.getElementById("groupCallStatus").textContent=invited?"Joining invited call…":"Joining room…";
+    const localVideo=document.querySelector("#group-tile-local video");
+    if(localVideo){
+      localVideo.muted=true;
+      localVideo.play().catch(()=>{});
+    }
+    document.getElementById("groupCallStatus").textContent=options?.invited?"Joining invited call…":"Joining room…";
 
-    // Do not create offers here. The join/ack handshake below makes the newest
-    // participant the offerer, so it works regardless of user-ID ordering.
+    /* Keep the original working mesh behavior: the lower ID offers to users
+       with higher IDs, while a joining user also triggers offers from existing
+       lower-ID participants through groupJoin below. */
+    onlineUsers.forEach(async u=>{
+      if(u?.id && u.id!==myId && myId<u.id){
+        try{await ensureGroupPeer(u.id,u.name,true);}catch(e){console.error("Initial group peer failed",e);}
+      }
+    });
+
     chat.send({
       type:"groupJoin",
       fromId:myId,
       fromName:nameBox.value.trim()||"Guest",
-      callId:groupCallSessionId,
-      joinedAt:groupJoinedAt
+      callId:groupCallSessionId
     });
 
-    setTimeout(()=>{
-      if(groupActive){
-        document.getElementById("groupCallStatus").textContent=(groupPeers.size+1)+" people";
-      }
-    },1000);
+    setTimeout(setGroupCallStatus,700);
     return true;
   }catch(e){
     console.error("Group call could not open:",e);
     groupCallSessionId=null;
-    groupJoinedAt=0;
     groupActive=false;
-    groupLocalStream?.getTracks().forEach(t=>t.stop()); groupLocalStream=null;
+    groupLocalStream?.getTracks().forEach(t=>t.stop());
+    groupLocalStream=null;
     alert("Camera/microphone access was not available.");
     return false;
   }
 }
+
 function closeGroupCall(send=true){
-  if(send) try{chat.send({type:"groupLeave",fromId:myId,callId:groupCallSessionId});}catch{}
-  groupPeers.forEach(p=>p.pc.close()); groupPeers.clear();
-  groupLocalStream?.getTracks().forEach(t=>t.stop()); groupLocalStream=null;
-  groupScreenStream?.getTracks().forEach(t=>t.stop()); groupScreenStream=null;
+  const oldCallId=groupCallSessionId;
+  if(send)try{chat.send({type:"groupLeave",fromId:myId,callId:oldCallId});}catch{}
+  groupPeers.forEach(p=>{try{p.pc.close();}catch{}});
+  groupPeers.clear();
+  groupLocalStream?.getTracks().forEach(t=>t.stop());
+  groupLocalStream=null;
+  groupScreenStream?.getTracks().forEach(t=>t.stop());
+  groupScreenStream=null;
   groupCallSessionId=null;
   document.getElementById("groupCallGrid").innerHTML="";
-  document.getElementById("groupCall").style.display="none"; groupActive=false;
+  document.getElementById("groupCall").style.display="none";
+  groupActive=false;
+  const chatPanel=document.getElementById("groupCallChatPanel");
+  if(chatPanel)chatPanel.classList.remove("open");
+  const chatToggle=document.getElementById("groupCallChatToggle");
+  if(chatToggle)chatToggle.textContent="💬 Call chat";
 }
+
 document.getElementById("groupCallButton").onclick=openGroupCall;
 document.getElementById("quickGroupCall").onclick=openGroupCall;
 document.getElementById("groupHangup").onclick=()=>closeGroupCall();
 document.getElementById("groupMute").onclick=()=>{
-  const t=groupLocalStream?.getAudioTracks()[0]; if(!t)return; t.enabled=!t.enabled;
+  const t=groupLocalStream?.getAudioTracks()[0];
+  if(!t)return;
+  t.enabled=!t.enabled;
   document.getElementById("groupMute").textContent=t.enabled?"🎤 Mute":"🔇 Unmute";
 };
 document.getElementById("groupCamera").onclick=()=>{
-  const t=groupLocalStream?.getVideoTracks()[0]; if(!t)return; t.enabled=!t.enabled;
+  const t=groupLocalStream?.getVideoTracks()[0];
+  if(!t)return;
+  t.enabled=!t.enabled;
   document.getElementById("groupCamera").textContent=t.enabled?"📷 Camera":"📷 Camera On";
 };
 document.getElementById("groupScreen").onclick=async()=>{
@@ -6053,74 +6119,44 @@ document.getElementById("groupScreen").onclick=async()=>{
   }
 
   try{
-    groupScreenStream=await navigator.mediaDevices.getDisplayMedia({
-      video:true,
-      audio:false
-    });
-
+    groupScreenStream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
     const track=groupScreenStream.getVideoTracks()[0];
     if(!track)throw new Error("No screen track was returned.");
-
     groupPeers.forEach(p=>{
       const sender=p.pc.getSenders().find(s=>s.track&&s.track.kind==="video");
       if(sender)sender.replaceTrack(track).catch(()=>{});
     });
-
-    track.onended=()=>{
-      if(groupScreenStream)document.getElementById("groupScreen").click();
-    };
-
+    track.onended=()=>{if(groupScreenStream)document.getElementById("groupScreen").click();};
     document.getElementById("groupScreen").textContent="🛑 Stop sharing";
   }catch(e){
     console.error("Group screen sharing failed:",e);
-    if(groupScreenStream){
-      groupScreenStream.getTracks().forEach(t=>t.stop());
-      groupScreenStream=null;
-    }
-    if(e&&e.name!=="AbortError"&&e.name!=="NotAllowedError"){
-      alert("Screen sharing could not start: "+(e.message||e.name||"Unknown error"));
-    }
+    groupScreenStream?.getTracks().forEach(t=>t.stop());
+    groupScreenStream=null;
+    if(e?.name!=="AbortError"&&e?.name!=="NotAllowedError")alert("Screen sharing could not start: "+(e?.message||e?.name||"Unknown error"));
   }
-}
+};
 
-
-async function switchGroupCamera() {
-  if(!groupLocalStream || !navigator.mediaDevices) return;
-
+async function switchGroupCamera(){
+  if(!groupLocalStream||!navigator.mediaDevices)return;
   const oldTrack=groupLocalStream.getVideoTracks()[0];
   if(!oldTrack)return;
-
   const nextFacing=groupFacingMode==="user"?"environment":"user";
-
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:{ideal:nextFacing}},
-      audio:false
-    });
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:nextFacing}},audio:false});
     const newTrack=stream.getVideoTracks()[0];
     if(!newTrack)throw new Error("No camera track returned.");
-
     groupPeers.forEach(p=>{
       const sender=p.pc.getSenders().find(s=>s.track&&s.track.kind==="video");
       if(sender)sender.replaceTrack(newTrack).catch(()=>{});
     });
-
     groupLocalStream.removeTrack(oldTrack);
     groupLocalStream.addTrack(newTrack);
     oldTrack.stop();
-
     const localVideo=document.querySelector("#group-tile-local video");
-    if(localVideo){
-      localVideo.srcObject=groupLocalStream;
-      localVideo.play().catch(()=>{});
-    }
-
+    if(localVideo){localVideo.srcObject=groupLocalStream;localVideo.play().catch(()=>{});}
     groupFacingMode=nextFacing;
-
     const button=document.getElementById("groupSwitchCamera");
-    if(button){
-      button.textContent=groupFacingMode==="user"?"🔄 Rear Camera":"🔄 Front Camera";
-    }
+    if(button)button.textContent=groupFacingMode==="user"?"🔄 Rear Camera":"🔄 Front Camera";
   }catch(error){
     console.error("Group camera switch failed:",error);
     alert("Your phone could not switch cameras.");
@@ -6130,90 +6166,60 @@ async function switchGroupCamera() {
 let groupFacingMode="user";
 document.getElementById("groupSwitchCamera").addEventListener("click",switchGroupCamera);
 
-
+/* Existing TChat mesh signaling — intentionally not gated by group call IDs. */
 chat.on("message",async({message})=>{
   if(!message||!message.type)return;
-  const sameCall=!message.callId || message.callId===groupCallSessionId;
 
-  // A participant who is already in the call acknowledges a new joiner.
-  // The new joiner then creates the WebRTC offers. This avoids the old
-  // lower-ID rule, which failed whenever the newest user's ID was smaller.
-  if(message.type==="groupJoin" && groupActive && message.fromId!==myId && sameCall){
-    const joinedAt=Number(message.joinedAt||0);
-    const shouldAcknowledge = joinedAt>groupJoinedAt || (joinedAt===groupJoinedAt && String(message.fromId)>String(myId));
-    if(shouldAcknowledge){
-      chat.send({
-        type:"groupJoinAck",
-        toId:message.fromId,
-        fromId:myId,
-        fromName:nameBox.value.trim()||"Guest",
-        callId:groupCallSessionId,
-        joinedAt:groupJoinedAt
-      });
+  if(message.type==="groupJoin" && groupActive && message.fromId!==myId){
+    if(myId<message.fromId){
+      try{await ensureGroupPeer(message.fromId,message.fromName,true);}
+      catch(e){console.error("Group join peer failed",e);}
     }
     return;
   }
 
-  // Only the participant who just joined creates the offer to an existing peer.
-  if(message.type==="groupJoinAck" && groupActive && message.toId===myId && sameCall){
-    if(!groupPeers.has(message.fromId)){
-      try{await ensureGroupPeer(message.fromId,message.fromName,false);}
-      catch(e){console.error("Group peer setup failed",e);}
-      const peer=groupPeers.get(message.fromId);
-      if(peer){
-        try{
-          const offer=await peer.pc.createOffer();
-          await peer.pc.setLocalDescription(offer);
-          chat.send({type:"groupOffer",toId:message.fromId,fromId:myId,fromName:nameBox.value.trim()||"Guest",callId:groupCallSessionId,offer:peer.pc.localDescription});
-        }catch(e){console.error("Group offer failed",e);}
-      }
-    }
-    return;
-  }
-
-  if(message.type==="groupOffer" && groupActive && message.toId===myId && sameCall){
+  if(message.type==="groupOffer" && message.toId===myId && groupActive){
     const peer=await ensureGroupPeer(message.fromId,message.fromName,false);
     if(!peer)return;
     try{
       await peer.pc.setRemoteDescription(new RTCSessionDescription(message.offer));
       for(const candidate of peer.pendingIce.splice(0)){
-        try{await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));}catch(e){console.warn("Queued group ICE failed",e);}
+        try{await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));}catch{}
       }
       const answer=await peer.pc.createAnswer();
       await peer.pc.setLocalDescription(answer);
-      chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,callId:groupCallSessionId,answer:peer.pc.localDescription});
+      chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,answer:peer.pc.localDescription});
     }catch(e){console.error("Group offer handling failed",e);}
     return;
   }
 
-  if(message.type==="groupAnswer" && groupActive && message.toId===myId && sameCall){
+  if(message.type==="groupAnswer" && message.toId===myId && groupActive){
     const peer=groupPeers.get(message.fromId);
-    if(peer) try{
+    if(peer)try{
       await peer.pc.setRemoteDescription(new RTCSessionDescription(message.answer));
       for(const candidate of peer.pendingIce.splice(0)){
-        try{await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));}catch(e){console.warn("Queued group ICE failed",e);}
+        try{await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));}catch{}
       }
     }catch(e){console.error("Group answer failed",e);}
     return;
   }
 
-  if(message.type==="groupIce" && groupActive && message.toId===myId && sameCall){
+  if(message.type==="groupIce" && message.toId===myId && groupActive){
     const peer=groupPeers.get(message.fromId);
     if(peer){
-      if(!peer.pc.remoteDescription){
-        peer.pendingIce.push(message.candidate);
-      }else{
-        try{await peer.pc.addIceCandidate(new RTCIceCandidate(message.candidate));}catch(e){console.warn("Group ICE failed",e);}
-      }
+      if(!peer.pc.remoteDescription)peer.pendingIce.push(message.candidate);
+      else try{await peer.pc.addIceCandidate(new RTCIceCandidate(message.candidate));}catch{}
     }
     return;
   }
 
-  if(message.type==="groupLeave" && groupActive && sameCall){
+  if(message.type==="groupLeave" && groupActive){
     removeGroupPeer(message.fromId);
+    setGroupCallStatus();
     return;
   }
 });
+
 window.addEventListener("beforeunload",()=>{if(groupActive)closeGroupCall(false);});
 
 </script>
@@ -7710,15 +7716,16 @@ aiRequest.addEventListener("keydown", event => {
     initGroupCallChat();
 
     const button = $("groupInviteButton");
-    if (button && !button.dataset.tchatBound) {
+    if (button) {
       button.type = "button";
       button.title = "Ring a specific nickname into this group call";
-      button.addEventListener("click", e => {
+      button.onclick = e => {
         e.preventDefault();
         e.stopPropagation();
         openGroupInvitePicker();
-      });
+      };
       button.dataset.tchatBound = "1";
+      window.tchatOpenGroupInvite = openGroupInvitePicker;
     }
 
     const chatToggle = $("groupCallChatToggle");
@@ -7765,12 +7772,22 @@ aiRequest.addEventListener("keydown", event => {
         return;
       }
 
-      if (message.type === "groupCallChat" && groupActive && message.callId === groupCallSessionId && message.fromId !== myId) {
+      if (message.type === "groupCallChat" && groupActive && message.fromId !== myId) {
         addGroupCallChatLine(message.fromName || "Guest", message.text || "", false);
         return;
       }
     });
   }
+
+  document.addEventListener("click", e => {
+    const button = e.target && e.target.closest ? e.target.closest("#groupInviteButton") : null;
+    if (!button || button.dataset.tchatDelegated) return;
+    if (typeof window.tchatOpenGroupInvite === "function") {
+      e.preventDefault();
+      e.stopPropagation();
+      window.tchatOpenGroupInvite();
+    }
+  }, true);
 
   function bootCriticalFixes() {
     initAlexEnhancements();
