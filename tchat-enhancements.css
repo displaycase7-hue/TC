@@ -1,0 +1,244 @@
+/* TChat Enhancements */
+#alexQuickActions{
+  margin:10px 0 0;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:13px;
+  background:var(--surface);
+}
+.alexQuickTitle{
+  font-size:12px;
+  font-weight:800;
+  color:var(--text);
+  margin-bottom:7px;
+}
+.alexQuickRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.alexQuickRow button{
+  background:var(--surface2)!important;
+  color:var(--text)!important;
+  border:1px solid var(--line)!important;
+  padding:7px 9px!important;
+  border-radius:9px!important;
+  font-size:11px!important;
+}
+.alexQuickRow button:hover{background:var(--line)!important}
+#alexQuickHint{
+  color:var(--muted);
+  font-size:10px;
+  margin-top:7px;
+}
+
+#enhancedLocalTools .etoolGrid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+  margin-top:8px;
+}
+.etoolMini{
+  min-width:0;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px;
+  background:var(--surface);
+}
+.etoolLabel{
+  font-weight:800;
+  font-size:12px;
+  margin-bottom:7px;
+}
+.etoolCalcRow,.etoolCountRow,.etoolBtns{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.etoolCalcRow input{flex:1;min-width:0;margin:0!important}
+.etoolCalcRow button{min-width:42px}
+.etoolCountRow input{
+  width:70px!important;
+  margin:0!important;
+}
+.etoolCountRow input:last-of-type{width:55px!important}
+.etoolBig{
+  font-variant-numeric:tabular-nums;
+  font-size:24px;
+  font-weight:800;
+  margin:5px 0 8px;
+  letter-spacing:.04em;
+}
+.etoolResult{
+  min-height:26px;
+  margin-top:7px;
+  padding:6px 8px;
+  border-radius:8px;
+  background:var(--surface2);
+  border:1px solid var(--line);
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+.etoolMini input{
+  width:100%;
+  min-width:0;
+  margin:0 0 6px!important;
+}
+.etoolBtns button,.etoolMini > button{
+  padding:7px 10px!important;
+  font-size:11px!important;
+}
+.etoolMini > button{width:100%}
+
+#groupInviteButton{
+  background:#3a465b!important;
+}
+#groupInviteDialog,
+#groupInvitePicker{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:70000;
+  background:rgba(5,9,16,.74);
+  backdrop-filter:blur(8px);
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+#groupInviteDialog{
+  display:none;
+}
+#groupInviteBox,
+#groupInvitePickerBox{
+  width:min(420px,100%);
+  max-height:90vh;
+  overflow:auto;
+  border-radius:22px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  box-shadow:0 25px 80px rgba(0,0,0,.45);
+  padding:22px;
+}
+#groupInviteBox{text-align:center}
+.groupInviteIcon{
+  width:68px;
+  height:68px;
+  margin:0 auto 10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:50%;
+  background:var(--surface2);
+  font-size:32px;
+  animation:tchatCallPulse 1.3s ease-in-out infinite;
+}
+@keyframes tchatCallPulse{
+  0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(79,109,245,.15)}
+  50%{transform:scale(1.05);box-shadow:0 0 0 12px rgba(79,109,245,0)}
+}
+#groupInviteBox h2,#groupInvitePickerBox h2{
+  margin:0 0 7px;
+  font-size:20px;
+}
+#groupInviteText{
+  margin:0 auto;
+  color:var(--text);
+  line-height:1.45;
+}
+#groupInviteRoom{
+  margin-top:8px;
+  color:var(--muted);
+  font-size:12px;
+}
+#groupInviteButtons{
+  display:flex;
+  gap:8px;
+  margin-top:18px;
+}
+#groupInviteButtons button{
+  flex:1;
+  min-height:46px;
+}
+#groupInviteDecline{
+  background:#5b6472!important;
+}
+.groupInviteHint{
+  margin-top:11px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.4;
+}
+
+.groupPickerHeader{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  justify-content:space-between;
+  margin-bottom:12px;
+}
+.groupPickerHeader p{
+  margin:3px 0 0;
+  color:var(--muted);
+  font-size:12px;
+}
+.groupPickerClose{
+  width:38px;
+  height:38px;
+  min-width:38px;
+  padding:0!important;
+  border-radius:50%!important;
+  background:var(--surface2)!important;
+  color:var(--text)!important;
+  border:1px solid var(--line)!important;
+}
+#groupPickerSearch{
+  width:100%;
+  margin:0 0 9px;
+}
+#groupPickerList{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.groupPickerUser{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  width:100%;
+  padding:10px 11px!important;
+  text-align:left;
+  background:var(--surface2)!important;
+  color:var(--text)!important;
+  border:1px solid var(--line)!important;
+  border-radius:12px!important;
+}
+.groupPickerUser:hover{background:var(--line)!important}
+.groupPickerDot{
+  color:#2ecc71;
+  font-size:10px;
+}
+.groupPickerName{
+  flex:1;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.groupPickerArrow{
+  color:var(--muted);
+  font-weight:800;
+}
+.groupPickerEmpty{
+  padding:16px 8px;
+  color:var(--muted);
+  text-align:center;
+  font-size:12px;
+}
+
+@media(max-width:700px){
+  .alexQuickRow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .alexQuickRow button{width:100%}
+  #enhancedLocalTools .etoolGrid{grid-template-columns:1fr}
+  #groupInviteBox,#groupInvitePickerBox{padding:18px;border-radius:18px}
+  #groupInviteButtons{position:sticky;bottom:0;padding-top:8px;background:var(--surface)}
+}
