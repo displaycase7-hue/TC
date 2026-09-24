@@ -1303,6 +1303,8 @@ body.dark #toolsMenu button{color:var(--text)}
     <button id="groupCamera">📷 Camera</button>
     <button id="groupSwitchCamera">🔄 Switch Camera</button>
     <button id="groupScreen">🖥️ Share screen</button>
+    <button id="groupCallChatToggle">💬 Call chat</button>
+    <button id="groupInviteButton">👤 Invite user</button>
     <button id="groupHangup">☎ Leave call</button>
   </div>
 </div>
@@ -5937,6 +5939,7 @@ window.addEventListener(
 ================================================== */
 let groupActive=false, groupLocalStream=null, groupScreenStream=null, groupPeers=new Map();
 let groupCallSessionId=null;
+let groupJoinedAt=0;
 
 function groupTile(id,name,stream){
   let tile=document.getElementById("group-tile-"+id);
@@ -5953,7 +5956,7 @@ async function ensureGroupPeer(id,name,initiator){
   if(!id || id===myId || !groupActive)return null;
   if(groupPeers.has(id)) return groupPeers.get(id);
   const pc=new RTCPeerConnection(rtcConfig);
-  const peer={pc,name,remoteStream:new MediaStream()}; groupPeers.set(id,peer);
+  const peer={pc,name,remoteStream:new MediaStream(),pendingIce:[]}; groupPeers.set(id,peer);
   groupLocalStream?.getTracks().forEach(t=>pc.addTrack(t,groupLocalStream));
   pc.ontrack=e=>{
     e.streams[0]?.getTracks().forEach(t=>peer.remoteStream.addTrack(t));
@@ -5973,42 +5976,36 @@ async function openGroupCall(options={}){
   if(groupActive)return true;
   const invited=options.invited===true;
   const requestedCallId=options.callId||null;
-  const participantIds=Array.isArray(options.participantIds)?options.participantIds.filter(Boolean):[];
   try{
     groupLocalStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-    groupCallSessionId=requestedCallId||crypto.randomUUID();
-    groupActive=true; document.getElementById("groupCall").style.display="flex";
+    groupCallSessionId=requestedCallId||((crypto&&crypto.randomUUID)?crypto.randomUUID():"gcall-"+Date.now()+"-"+Math.random().toString(36).slice(2));
+    groupJoinedAt=Date.now();
+    groupActive=true;
+    document.getElementById("groupCall").style.display="flex";
     groupTile("local",nameBox.value.trim()||"You",groupLocalStream);
     document.querySelector("#group-tile-local video").muted=true;
     document.getElementById("groupCallStatus").textContent=invited?"Joining invited call…":"Joining room…";
 
-    if(!invited){
-      onlineUsers.forEach(async u=>{
-        if(u.id!==myId && myId<u.id) await ensureGroupPeer(u.id,u.name,true);
-      });
-    }
-
-    chat.send({type:"groupJoin",fromId:myId,fromName:nameBox.value.trim()||"Guest",callId:groupCallSessionId});
-
-    // An invited user connects only to the people who were already in the call.
-    if(invited){
-      for(const id of participantIds){
-        if(id===myId)continue;
-        const u=onlineUsers.get(id);
-        if(myId<id){
-          try{await ensureGroupPeer(id,u?.name||"Guest",true);}catch(err){console.error("Invited participant connection failed",err);}
-        }
-      }
-    }
+    // Do not create offers here. The join/ack handshake below makes the newest
+    // participant the offerer, so it works regardless of user-ID ordering.
+    chat.send({
+      type:"groupJoin",
+      fromId:myId,
+      fromName:nameBox.value.trim()||"Guest",
+      callId:groupCallSessionId,
+      joinedAt:groupJoinedAt
+    });
 
     setTimeout(()=>{
       if(groupActive){
         document.getElementById("groupCallStatus").textContent=(groupPeers.size+1)+" people";
       }
-    },800);
+    },1000);
     return true;
   }catch(e){
+    console.error("Group call could not open:",e);
     groupCallSessionId=null;
+    groupJoinedAt=0;
     groupActive=false;
     groupLocalStream?.getTracks().forEach(t=>t.stop()); groupLocalStream=null;
     alert("Camera/microphone access was not available.");
@@ -6137,24 +6134,85 @@ document.getElementById("groupSwitchCamera").addEventListener("click",switchGrou
 chat.on("message",async({message})=>{
   if(!message||!message.type)return;
   const sameCall=!message.callId || message.callId===groupCallSessionId;
+
+  // A participant who is already in the call acknowledges a new joiner.
+  // The new joiner then creates the WebRTC offers. This avoids the old
+  // lower-ID rule, which failed whenever the newest user's ID was smaller.
   if(message.type==="groupJoin" && groupActive && message.fromId!==myId && sameCall){
-    if(myId<message.fromId) await ensureGroupPeer(message.fromId,message.fromName,true);
+    const joinedAt=Number(message.joinedAt||0);
+    const shouldAcknowledge = joinedAt>groupJoinedAt || (joinedAt===groupJoinedAt && String(message.fromId)>String(myId));
+    if(shouldAcknowledge){
+      chat.send({
+        type:"groupJoinAck",
+        toId:message.fromId,
+        fromId:myId,
+        fromName:nameBox.value.trim()||"Guest",
+        callId:groupCallSessionId,
+        joinedAt:groupJoinedAt
+      });
+    }
     return;
   }
+
+  // Only the participant who just joined creates the offer to an existing peer.
+  if(message.type==="groupJoinAck" && groupActive && message.toId===myId && sameCall){
+    if(!groupPeers.has(message.fromId)){
+      try{await ensureGroupPeer(message.fromId,message.fromName,false);}
+      catch(e){console.error("Group peer setup failed",e);}
+      const peer=groupPeers.get(message.fromId);
+      if(peer){
+        try{
+          const offer=await peer.pc.createOffer();
+          await peer.pc.setLocalDescription(offer);
+          chat.send({type:"groupOffer",toId:message.fromId,fromId:myId,fromName:nameBox.value.trim()||"Guest",callId:groupCallSessionId,offer:peer.pc.localDescription});
+        }catch(e){console.error("Group offer failed",e);}
+      }
+    }
+    return;
+  }
+
   if(message.type==="groupOffer" && groupActive && message.toId===myId && sameCall){
     const peer=await ensureGroupPeer(message.fromId,message.fromName,false);
     if(!peer)return;
-    await peer.pc.setRemoteDescription(new RTCSessionDescription(message.offer));
-    const answer=await peer.pc.createAnswer(); await peer.pc.setLocalDescription(answer);
-    chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,callId:groupCallSessionId,answer:peer.pc.localDescription}); return;
+    try{
+      await peer.pc.setRemoteDescription(new RTCSessionDescription(message.offer));
+      for(const candidate of peer.pendingIce.splice(0)){
+        try{await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));}catch(e){console.warn("Queued group ICE failed",e);}
+      }
+      const answer=await peer.pc.createAnswer();
+      await peer.pc.setLocalDescription(answer);
+      chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,callId:groupCallSessionId,answer:peer.pc.localDescription});
+    }catch(e){console.error("Group offer handling failed",e);}
+    return;
   }
+
   if(message.type==="groupAnswer" && groupActive && message.toId===myId && sameCall){
-    const peer=groupPeers.get(message.fromId); if(peer) await peer.pc.setRemoteDescription(new RTCSessionDescription(message.answer)); return;
+    const peer=groupPeers.get(message.fromId);
+    if(peer) try{
+      await peer.pc.setRemoteDescription(new RTCSessionDescription(message.answer));
+      for(const candidate of peer.pendingIce.splice(0)){
+        try{await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));}catch(e){console.warn("Queued group ICE failed",e);}
+      }
+    }catch(e){console.error("Group answer failed",e);}
+    return;
   }
+
   if(message.type==="groupIce" && groupActive && message.toId===myId && sameCall){
-    const peer=groupPeers.get(message.fromId); if(peer) try{await peer.pc.addIceCandidate(new RTCIceCandidate(message.candidate));}catch{} return;
+    const peer=groupPeers.get(message.fromId);
+    if(peer){
+      if(!peer.pc.remoteDescription){
+        peer.pendingIce.push(message.candidate);
+      }else{
+        try{await peer.pc.addIceCandidate(new RTCIceCandidate(message.candidate));}catch(e){console.warn("Group ICE failed",e);}
+      }
+    }
+    return;
   }
-  if(message.type==="groupLeave" && groupActive && sameCall){removeGroupPeer(message.fromId);return;}
+
+  if(message.type==="groupLeave" && groupActive && sameCall){
+    removeGroupPeer(message.fromId);
+    return;
+  }
 });
 window.addEventListener("beforeunload",()=>{if(groupActive)closeGroupCall(false);});
 
@@ -7444,19 +7502,20 @@ aiRequest.addEventListener("keydown", event => {
   }
 
   function initGroupCallChat() {
-    if ($("groupCallChatToggle")) return;
-    const controls = $("groupCallControls");
-    const hangup = $("groupHangup");
-    if (!controls || !hangup) return;
+    const toggle = $("groupCallChatToggle");
+    const panel = $("groupCallChatPanel");
+    const form = $("groupCallChatForm");
+    const input = $("groupCallChatInput");
+    const close = $("groupCallChatClose");
+    if (!toggle || !panel || !form || !input || !close) return;
+    if (!toggle.dataset.tchatBound) {
+      toggle.type = "button";
+      toggle.textContent = "💬 Call chat";
+      toggle.addEventListener("click", () => setGroupChatOpen(!panel.classList.contains("open")));
+      toggle.dataset.tchatBound = "1";
+    }
+    close.onclick = () => setGroupChatOpen(false);
 
-    const toggle = document.createElement("button");
-    toggle.id = "groupCallChatToggle";
-    toggle.type = "button";
-    toggle.textContent = "💬 Call chat";
-    toggle.onclick = () => setGroupChatOpen(!$("groupCallChatPanel")?.classList.contains("open"));
-    controls.insertBefore(toggle, hangup);
-
-    $("groupCallChatClose").onclick = () => setGroupChatOpen(false);
     $("groupCallChatForm").addEventListener("submit", e => {
       e.preventDefault();
       const input = $("groupCallChatInput");
@@ -7622,7 +7681,7 @@ aiRequest.addEventListener("keydown", event => {
       toast("Group call", "You must be in a group call to invite someone.", "warning");
       return;
     }
-    const inviteId = `ginvite-${crypto.randomUUID()}`;
+    const inviteId = `ginvite-${((crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now()+"-"+Math.random().toString(36).slice(2))}`;
     const fromName = (nameBox?.value || "").trim() || "Guest";
     const participantIds = [myId, ...groupPeers.keys()];
     const participantNames = {};
@@ -7650,15 +7709,27 @@ aiRequest.addEventListener("keydown", event => {
     installGroupInviteDialog();
     initGroupCallChat();
 
-    const controls = $("groupCallControls");
-    if (controls && !$("groupInviteButton")) {
-      const button = document.createElement("button");
-      button.id = "groupInviteButton";
+    const button = $("groupInviteButton");
+    if (button && !button.dataset.tchatBound) {
       button.type = "button";
-      button.textContent = "👤 Invite user";
       button.title = "Ring a specific nickname into this group call";
-      button.onclick = openGroupInvitePicker;
-      controls.insertBefore(button, $("groupHangup"));
+      button.addEventListener("click", e => {
+        e.preventDefault();
+        e.stopPropagation();
+        openGroupInvitePicker();
+      });
+      button.dataset.tchatBound = "1";
+    }
+
+    const chatToggle = $("groupCallChatToggle");
+    if (chatToggle && !chatToggle.dataset.tchatBound) {
+      chatToggle.type = "button";
+      chatToggle.addEventListener("click", e => {
+        e.preventDefault();
+        e.stopPropagation();
+        setGroupChatOpen(!$("groupCallChatPanel")?.classList.contains("open"));
+      });
+      chatToggle.dataset.tchatBound = "1";
     }
 
     if (typeof chat?.on !== "function") return;
