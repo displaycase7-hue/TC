@@ -2194,8 +2194,18 @@ async function requestDesktopNotifications() {
     }
 }
 
+function isTChatInactive() {
+    // Desktop notifications are intended only when TChat is not actively being viewed.
+    // document.hidden catches minimized/hidden tabs; hasFocus catches an unfocused window.
+    return document.visibilityState !== "visible" || !document.hasFocus();
+}
+
 async function showDesktopNotification(title, text, kind = "message", requireInteraction = false) {
     if (!window.isSecureContext || !("Notification" in window) || Notification.permission !== "granted") return;
+
+    // Never pop a desktop notification while TChat is the active, focused window.
+    if (!isTChatInactive()) return;
+
     const options = {
         body: text,
         icon: "./icon-192.png",
@@ -2205,6 +2215,7 @@ async function showDesktopNotification(title, text, kind = "message", requireInt
         requireInteraction,
         data: { url: window.location.href, kind }
     };
+
     try {
         if (!serviceWorkerRegistration) await registerAppServiceWorker();
         if (serviceWorkerRegistration) {
@@ -2219,7 +2230,11 @@ async function showDesktopNotification(title, text, kind = "message", requireInt
 
 function notifyUser(title, text, kind = "info", forceDesktop = false) {
     showNotification(title, text, kind);
-    if (document.hidden || forceDesktop) {
+
+    // forceDesktop is intentionally ignored while TChat is active/focused.
+    // Calls/messages should only create desktop notifications when the app is
+    // minimized, hidden, or otherwise inactive.
+    if (isTChatInactive()) {
         try {
             startTitleFlash(title);
             playNotificationSound();
