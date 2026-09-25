@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta http-equiv="Permissions-Policy" content="display-capture=(self)">
+<meta http-equiv="Permissions-Policy" content="camera=(self), microphone=(self), display-capture=(self)">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#252525">
@@ -6019,34 +6019,55 @@ function setGroupCallStatus(){
 
 async function requestGroupMedia(){
   if(!window.isSecureContext){
-    throw new DOMException("TChat must be opened over HTTPS before camera/microphone access can be requested.","SecurityError");
-  }
-  if(!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function"){
-    throw new DOMException("This browser does not expose camera/microphone access to this page.","NotSupportedError");
+    throw new DOMException(
+      "TChat must be opened over HTTPS before camera/microphone access can be requested.",
+      "SecurityError"
+    );
   }
 
-  // Ask from the actual button/dialog interaction so Chromium/Edge can show
-  // its normal permission prompt. Do not cache or fake permission state.
+  if(!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function"){
+    throw new DOMException(
+      "This browser does not expose camera/microphone access to this page.",
+      "NotSupportedError"
+    );
+  }
+
+  // Use the same simple request as the working private video call.
+  // Avoiding camera constraints here prevents a PWA/Chromium device from
+  // rejecting an otherwise usable webcam because of its advertised modes.
   return await navigator.mediaDevices.getUserMedia({
-    video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:"user"}},
+    video:true,
     audio:true
   });
 }
 
 function groupMediaErrorMessage(error){
   const name=String(error?.name||"");
-  if(name==="NotAllowedError" || name==="PermissionDeniedError")
-    return "Camera/microphone permission was blocked. Click the camera/lock icon next to the address bar and allow Camera and Microphone for displaycase7-hue.github.io, then try the group call again.";
-  if(name==="NotFoundError")
-    return "No camera and/or microphone was found. Check that your webcam and microphone are connected and enabled in Windows.";
-  if(name==="NotReadableError")
-    return "Windows or another application is currently using the camera or microphone. Close apps such as Camera, Teams, Discord, Zoom, or another browser tab using them, then try again.";
-  if(name==="OverconstrainedError")
-    return "The selected camera cannot satisfy the requested settings. TChat will retry with basic camera settings.";
-  if(name==="SecurityError")
+
+  if(name==="NotAllowedError" || name==="PermissionDeniedError"){
+    return "TChat was not allowed to use your camera or microphone. Open the site/app permissions for TChat and allow both Camera and Microphone, then try the group call again.";
+  }
+
+  if(name==="NotFoundError"){
+    return "TChat could not find a usable camera and/or microphone. Check Windows Settings > Privacy & security > Camera and Microphone, make sure desktop apps can access them, and make sure another app is not disabling the device.";
+  }
+
+  if(name==="NotReadableError"){
+    return "The camera or microphone was found, but Windows would not let TChat use it. Close Camera, Teams, Discord, Zoom, other browsers, or anything else currently using the device, then try again.";
+  }
+
+  if(name==="OverconstrainedError"){
+    return "The camera rejected the requested settings. TChat is using basic camera settings, so please try the group call again.";
+  }
+
+  if(name==="SecurityError"){
     return error?.message || "Camera/microphone access is blocked because this page is not being treated as a secure site.";
-  if(name==="NotSupportedError")
-    return error?.message || "This browser does not support camera/microphone access here.";
+  }
+
+  if(name==="NotSupportedError"){
+    return error?.message || "This browser does not expose camera/microphone access here.";
+  }
+
   return "Camera/microphone access failed: " + (error?.message || name || "Unknown browser error") + ".";
 }
 
