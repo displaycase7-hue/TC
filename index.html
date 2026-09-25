@@ -6017,12 +6017,56 @@ function setGroupCallStatus(){
   if(el && groupActive)el.textContent=(groupPeers.size+1)+" people";
 }
 
+async function requestGroupMedia(){
+  if(!window.isSecureContext){
+    throw new DOMException("TChat must be opened over HTTPS before camera/microphone access can be requested.","SecurityError");
+  }
+  if(!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function"){
+    throw new DOMException("This browser does not expose camera/microphone access to this page.","NotSupportedError");
+  }
+
+  // Ask from the actual button/dialog interaction so Chromium/Edge can show
+  // its normal permission prompt. Do not cache or fake permission state.
+  return await navigator.mediaDevices.getUserMedia({
+    video:{width:{ideal:1280},height:{ideal:720},facingMode:{ideal:"user"}},
+    audio:true
+  });
+}
+
+function groupMediaErrorMessage(error){
+  const name=String(error?.name||"");
+  if(name==="NotAllowedError" || name==="PermissionDeniedError")
+    return "Camera/microphone permission was blocked. Click the camera/lock icon next to the address bar and allow Camera and Microphone for displaycase7-hue.github.io, then try the group call again.";
+  if(name==="NotFoundError")
+    return "No camera and/or microphone was found. Check that your webcam and microphone are connected and enabled in Windows.";
+  if(name==="NotReadableError")
+    return "Windows or another application is currently using the camera or microphone. Close apps such as Camera, Teams, Discord, Zoom, or another browser tab using them, then try again.";
+  if(name==="OverconstrainedError")
+    return "The selected camera cannot satisfy the requested settings. TChat will retry with basic camera settings.";
+  if(name==="SecurityError")
+    return error?.message || "Camera/microphone access is blocked because this page is not being treated as a secure site.";
+  if(name==="NotSupportedError")
+    return error?.message || "This browser does not support camera/microphone access here.";
+  return "Camera/microphone access failed: " + (error?.message || name || "Unknown browser error") + ".";
+}
+
 async function openGroupCall(options={}){
   if(groupActive)return true;
 
   const requestedCallId=options?.callId||null;
   try{
-    groupLocalStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+    try{
+      groupLocalStream=await requestGroupMedia();
+    }catch(firstError){
+      console.error("Group media request failed:",firstError);
+      // Some webcams reject ideal settings. Retry once with the simplest
+      // possible constraints before reporting the failure.
+      if(firstError?.name==="OverconstrainedError" || firstError?.name==="NotReadableError"){
+        groupLocalStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+      }else{
+        throw firstError;
+      }
+    }
     groupCallSessionId=requestedCallId || ((crypto&&crypto.randomUUID)?crypto.randomUUID():"gcall-"+Date.now()+"-"+Math.random().toString(36).slice(2));
     groupActive=true;
 
@@ -6059,7 +6103,12 @@ async function openGroupCall(options={}){
     groupActive=false;
     groupLocalStream?.getTracks().forEach(t=>t.stop());
     groupLocalStream=null;
-    alert("Camera/microphone access was not available.");
+
+    const message=groupMediaErrorMessage(e);
+    const retry=window.confirm(message + "\n\nPress OK to try the camera/microphone request again.");
+    if(retry){
+      return openGroupCall(options);
+    }
     return false;
   }
 }
