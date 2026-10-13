@@ -1,0 +1,5 @@
+Call invites/conferencing
+file sharing to everyone in chat
+fix filesharing CSS
+improve Alex AI capabilities
+These fixes will be made in the next 2 weeks
