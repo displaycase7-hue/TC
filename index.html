@@ -5995,7 +5995,7 @@ async function ensureGroupPeer(id,name,initiator){
 
   pc.onicecandidate=e=>{
     if(e.candidate){
-      try{chat.send({type:"groupIce",toId:id,fromId:myId,candidate:e.candidate});}catch{}
+      try{chat.send({type:"groupIce",toId:id,fromId:myId,callId:groupCallSessionId,candidate:e.candidate});}catch{}
     }
   };
 
@@ -6015,6 +6015,7 @@ async function ensureGroupPeer(id,name,initiator){
         toId:id,
         fromId:myId,
         fromName:nameBox.value.trim()||"Guest",
+        callId:groupCallSessionId,
         offer:pc.localDescription
       });
     }catch(error){
@@ -6200,8 +6201,10 @@ document.getElementById("groupSwitchCamera").addEventListener("click",switchGrou
 /* Existing TChat mesh signaling — intentionally not gated by group call IDs. */
 chat.on("message",async({message})=>{
   if(!message||!message.type)return;
+  // Ignore stale signaling from another call, but accept legacy messages without callId.
+  const sameGroupCall = !message.callId || message.callId === groupCallSessionId;
 
-  if(message.type==="groupJoin" && groupActive && message.fromId!==myId){
+  if(message.type==="groupJoin" && groupActive && message.fromId!==myId && sameGroupCall){
     if(myId<message.fromId){
       try{await ensureGroupPeer(message.fromId,message.fromName,true);}
       catch(e){console.error("Group join peer failed",e);}
@@ -6209,7 +6212,7 @@ chat.on("message",async({message})=>{
     return;
   }
 
-  if(message.type==="groupOffer" && message.toId===myId && groupActive){
+  if(message.type==="groupOffer" && message.toId===myId && groupActive && sameGroupCall){
     const peer=await ensureGroupPeer(message.fromId,message.fromName,false);
     if(!peer)return;
     try{
@@ -6219,12 +6222,12 @@ chat.on("message",async({message})=>{
       }
       const answer=await peer.pc.createAnswer();
       await peer.pc.setLocalDescription(answer);
-      chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,answer:peer.pc.localDescription});
+      chat.send({type:"groupAnswer",toId:message.fromId,fromId:myId,callId:groupCallSessionId,answer:peer.pc.localDescription});
     }catch(e){console.error("Group offer handling failed",e);}
     return;
   }
 
-  if(message.type==="groupAnswer" && message.toId===myId && groupActive){
+  if(message.type==="groupAnswer" && message.toId===myId && groupActive && sameGroupCall){
     const peer=groupPeers.get(message.fromId);
     if(peer)try{
       await peer.pc.setRemoteDescription(new RTCSessionDescription(message.answer));
@@ -6235,7 +6238,7 @@ chat.on("message",async({message})=>{
     return;
   }
 
-  if(message.type==="groupIce" && message.toId===myId && groupActive){
+  if(message.type==="groupIce" && message.toId===myId && groupActive && sameGroupCall){
     const peer=groupPeers.get(message.fromId);
     if(peer){
       if(!peer.pc.remoteDescription)peer.pendingIce.push(message.candidate);
@@ -6244,7 +6247,7 @@ chat.on("message",async({message})=>{
     return;
   }
 
-  if(message.type==="groupLeave" && groupActive){
+  if(message.type==="groupLeave" && groupActive && sameGroupCall){
     removeGroupPeer(message.fromId);
     setGroupCallStatus();
     return;
@@ -7685,6 +7688,10 @@ aiRequest.addEventListener("keydown", event => {
         <div id="groupPickerList"></div>
       </div>`;
     document.body.appendChild(modal);
+    // The picker CSS defaults to display:none; explicitly reveal it after insertion.
+    // Without this, the Invite user button runs but the picker remains invisible.
+    modal.style.display = "flex";
+    modal.setAttribute("aria-hidden", "false");
     const list = $("groupPickerList");
     const search = $("groupPickerSearch");
 
@@ -7706,8 +7713,12 @@ aiRequest.addEventListener("keydown", event => {
         list.appendChild(b);
       }
     };
-    $("groupPickerClose").onclick = () => modal.remove();
-    modal.addEventListener("click", e => { if (e.target === modal) modal.remove(); });
+    const closePicker = () => {
+      modal.setAttribute("aria-hidden", "true");
+      modal.remove();
+    };
+    $("groupPickerClose").onclick = closePicker;
+    modal.addEventListener("click", e => { if (e.target === modal) closePicker(); });
     search.addEventListener("input", render);
     render();
     search.focus();
