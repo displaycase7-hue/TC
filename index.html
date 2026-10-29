@@ -7683,11 +7683,8 @@ aiRequest.addEventListener("keydown", event => {
   }
 
   function openGroupInvitePicker() {
-    const users = availableInviteUsers();
-    if (!users.length) {
-      toast("Group call", "There is nobody else available to invite right now.", "warning");
-      return;
-    }
+    // Always open the picker so the click has visible feedback, even when
+    // presence has not populated the online-user list yet.
     $("groupInvitePicker")?.remove();
     const modal = document.createElement("div");
     modal.id = "groupInvitePicker";
@@ -7711,7 +7708,14 @@ aiRequest.addEventListener("keydown", event => {
     const render = () => {
       list.innerHTML = "";
       const needle = search.value.trim().toLowerCase();
-      const filtered = users.filter(u => !needle || String(u.name || "").toLowerCase().includes(needle));
+      // Refresh presence each time the list renders instead of relying on a
+      // stale snapshot taken when the dialog first opened.
+      const currentUsers = availableInviteUsers();
+      if (!currentUsers.length) {
+        list.innerHTML = `<div class="groupPickerEmpty">No other users are online in this room yet. Ask them to open the room, then try again.</div>`;
+        return;
+      }
+      const filtered = currentUsers.filter(u => !needle || String(u.name || "").toLowerCase().includes(needle));
       if (!filtered.length) {
         list.innerHTML = `<div class="groupPickerEmpty">No matching nicknames are online.</div>`;
         return;
@@ -7736,6 +7740,11 @@ aiRequest.addEventListener("keydown", event => {
     render();
     search.focus();
   }
+
+  // Publish the click action immediately, independent of optional enhancer setup.
+  // The document-level capture handler below can therefore handle this button
+  // even if another initialization step fails.
+  window.tchatOpenGroupInvite = openGroupInvitePicker;
 
   function sendGroupInvite(user) {
     if (!groupActive || !groupCallSessionId) {
@@ -7837,10 +7846,17 @@ aiRequest.addEventListener("keydown", event => {
   document.addEventListener("click", e => {
     const button = e.target && e.target.closest ? e.target.closest("#groupInviteButton") : null;
     if (!button || button.dataset.tchatDelegated) return;
-    if (typeof window.tchatOpenGroupInvite === "function") {
-      e.preventDefault();
-      e.stopPropagation();
-      window.tchatOpenGroupInvite();
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      // Use the public handler when available; lexical fallback covers unusual
+      // script/init ordering without silently dropping the click.
+      (typeof window.tchatOpenGroupInvite === "function"
+        ? window.tchatOpenGroupInvite
+        : openGroupInvitePicker)();
+    } catch (error) {
+      console.error("Could not open the group invite picker:", error);
+      try { alert("The invite picker could not open. Please reload the page and try again."); } catch {}
     }
   }, true);
 
