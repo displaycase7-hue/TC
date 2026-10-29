@@ -764,8 +764,21 @@ button:hover{background:var(--accent2)}
 #onlineUsers{max-width:850px;padding:0 14px;margin:8px auto}
 #onlineUsersTitle{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
 .userPill{background:var(--surface);border:1px solid var(--line)}
-#fileShare{max-width:850px;padding:0 14px}
-#fileShareBox{background:var(--surface);border:1px solid var(--line);box-shadow:none}
+/* File-sharing dialog: keep the overlay full-screen and center the dialog. */
+#fileShare{
+    width:100%;
+    max-width:none;
+    min-height:100vh;
+    padding:18px;
+    background:rgba(8,14,25,.58);
+    align-items:center;
+    justify-content:center;
+}
+#fileShareBox{
+    background:var(--surface);
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+}
 /* hide the old one-to-one target from the main composer; the feature remains available to receive calls */
 #videoTarget,#videoRequestButton{display:none!important}
 #form:after{content:""}
